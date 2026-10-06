@@ -691,6 +691,8 @@ void SetAverageSize(HWND hwnd, int averageSize) {
 }
 
 
+dkcolor::CopyFormat CurrentCopyFormat();
+
 void OnUtilityColorChanged(COLORREF color) {
     g_currentColor = color;
 }
