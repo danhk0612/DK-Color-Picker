@@ -4,6 +4,8 @@
 
 #include "color_formats.h"
 #include "color_library.h"
+#include "localization.h"
+#include "theme.h"
 #include "utility_window.h"
 
 #include <algorithm>
@@ -32,11 +34,14 @@ constexpr UINT kMenuPick = 1001;
 constexpr UINT kMenuAutoStart = 1002;
 constexpr UINT kMenuExit = 1003;
 constexpr UINT kMenuOpenTools = 1004;
+constexpr UINT kMenuAlwaysOpenTools = 1005;
 constexpr UINT kMenuZoomBase = 1100;
 constexpr UINT kMenuAverageBase = 1200;
 constexpr UINT kMenuHotkeyBase = 1300;
 constexpr UINT kMenuFormatBase = 1400;
 constexpr UINT kMenuEditTemplate = 1500;
+constexpr UINT kMenuThemeBase = 1600;
+constexpr UINT kMenuLanguageBase = 1700;
 
 constexpr int kTemplateEditId = 2001;
 
@@ -63,6 +68,9 @@ struct Settings {
     int hotkeyPreset = 0;
     int copyFormat = static_cast<int>(dkcolor::CopyFormat::Hex);
     std::wstring customTemplate = dkcolor::DefaultCustomTemplate();
+    bool alwaysOpenTools = false;
+    int themeMode = static_cast<int>(dktheme::ThemeMode::System);
+    int language = static_cast<int>(dkl10n::Language::Korean);
 };
 
 struct TemplateEditorState {
@@ -146,6 +154,9 @@ void SaveSettings() {
     const std::wstring average = std::to_wstring(g_settings.averageSize);
     const std::wstring hotkey = std::to_wstring(g_settings.hotkeyPreset);
     const std::wstring copyFormat = std::to_wstring(g_settings.copyFormat);
+    const std::wstring alwaysOpenTools = g_settings.alwaysOpenTools ? L"1" : L"0";
+    const std::wstring themeMode = std::to_wstring(g_settings.themeMode);
+    const std::wstring language = std::to_wstring(g_settings.language);
 
     WritePrivateProfileStringW(L"Picker", L"Zoom", zoom.c_str(), path.c_str());
     WritePrivateProfileStringW(L"Picker", L"AverageSize", average.c_str(), path.c_str());
@@ -155,6 +166,21 @@ void SaveSettings() {
         L"Copy",
         L"Template",
         g_settings.customTemplate.c_str(),
+        path.c_str());
+    WritePrivateProfileStringW(
+        L"Behavior",
+        L"AlwaysOpenTools",
+        alwaysOpenTools.c_str(),
+        path.c_str());
+    WritePrivateProfileStringW(
+        L"Appearance",
+        L"Theme",
+        themeMode.c_str(),
+        path.c_str());
+    WritePrivateProfileStringW(
+        L"Appearance",
+        L"Language",
+        language.c_str(),
         path.c_str());
 }
 
@@ -172,6 +198,24 @@ void LoadSettings() {
         GetPrivateProfileIntW(L"Hotkey", L"Preset", g_settings.hotkeyPreset, path.c_str()));
     const int copyFormat = static_cast<int>(
         GetPrivateProfileIntW(L"Copy", L"Format", g_settings.copyFormat, path.c_str()));
+    const int alwaysOpenTools = static_cast<int>(
+        GetPrivateProfileIntW(
+            L"Behavior",
+            L"AlwaysOpenTools",
+            g_settings.alwaysOpenTools ? 1 : 0,
+            path.c_str()));
+    const int themeMode = static_cast<int>(
+        GetPrivateProfileIntW(
+            L"Appearance",
+            L"Theme",
+            g_settings.themeMode,
+            path.c_str()));
+    const int language = static_cast<int>(
+        GetPrivateProfileIntW(
+            L"Appearance",
+            L"Language",
+            g_settings.language,
+            path.c_str()));
 
     std::array<wchar_t, 2049> customTemplate{};
     const std::wstring defaultTemplate = dkcolor::DefaultCustomTemplate();
@@ -197,6 +241,15 @@ void LoadSettings() {
         g_settings.copyFormat = copyFormat;
     }
     g_settings.customTemplate = customTemplate.data();
+    g_settings.alwaysOpenTools = alwaysOpenTools != 0;
+    if (themeMode >= static_cast<int>(dktheme::ThemeMode::System) &&
+        themeMode <= static_cast<int>(dktheme::ThemeMode::Dark)) {
+        g_settings.themeMode = themeMode;
+    }
+    if (language >= static_cast<int>(dkl10n::Language::Korean) &&
+        language <= static_cast<int>(dkl10n::Language::English)) {
+        g_settings.language = language;
+    }
 }
 
 void ReleaseDesktopCapture() {
@@ -638,13 +691,43 @@ void OnUtilityColorChanged(COLORREF color) {
     g_currentColor = color;
 }
 
+void OnUtilityCopyFormatChanged(dkcolor::CopyFormat format) {
+    g_settings.copyFormat = static_cast<int>(format);
+    SaveSettings();
+}
+
+dktheme::ThemeMode CurrentThemeMode() {
+    const int value = g_settings.themeMode;
+    if (value < static_cast<int>(dktheme::ThemeMode::System) ||
+        value > static_cast<int>(dktheme::ThemeMode::Dark)) {
+        return dktheme::ThemeMode::System;
+    }
+    return static_cast<dktheme::ThemeMode>(value);
+}
+
+dkl10n::Language CurrentLanguage() {
+    return g_settings.language == static_cast<int>(dkl10n::Language::English)
+        ? dkl10n::Language::English
+        : dkl10n::Language::Korean;
+}
+
+std::wstring CopyFormatDisplayName(dkcolor::CopyFormat format) {
+    if (format == dkcolor::CopyFormat::Custom) {
+        return dkl10n::Text(L"format.custom");
+    }
+    return dkcolor::CopyFormatLabel(format);
+}
+
 void OpenUtilityWindow() {
     if (g_utilityWindow == nullptr || !IsWindow(g_utilityWindow)) {
         g_utilityWindow = dkcolorui::CreateUtilityWindow(
             g_instance,
             g_messageWindow,
             g_currentColor,
-            OnUtilityColorChanged);
+            CurrentCopyFormat(),
+            CurrentThemeMode(),
+            OnUtilityColorChanged,
+            OnUtilityCopyFormatChanged);
     }
 
     if (g_utilityWindow != nullptr) {
@@ -685,7 +768,13 @@ void FinishPicking(HWND hwnd, int x, int y) {
         CurrentCopyFormat(),
         g_settings.customTemplate);
     CopyTextToClipboard(hwnd, text);
+
+    const bool openTools = g_settings.alwaysOpenTools;
     CancelPicking();
+
+    if (openTools) {
+        OpenUtilityWindow();
+    }
 }
 
 void DrawMagnifier(HDC hdc, int cursorX, int cursorY) {
@@ -1533,6 +1622,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
 
     SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
     LoadSettings();
+    dkl10n::SetLanguage(CurrentLanguage());
 
     g_mutex = CreateMutexW(nullptr, FALSE, kMutexName);
     if (g_mutex == nullptr) {
