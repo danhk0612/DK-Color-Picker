@@ -1023,10 +1023,10 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
             COLORREF parsed = RGB(0, 0, 0);
             if (!dkcolor::ParseColorText(value, &parsed)) {
-                const std::wstring message = dkl10n::Text(L"dialog.invalid_color");
+                const std::wstring dialogText = dkl10n::Text(L"dialog.invalid_color");
                 MessageBoxW(
                     hwnd,
-                    message.c_str(),
+                    dialogText.c_str(),
                     L"DK Color Picker",
                     MB_OK | MB_ICONWARNING);
                 return 0;
