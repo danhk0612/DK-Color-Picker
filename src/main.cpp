@@ -7,6 +7,7 @@
 #include "localization.h"
 #include "theme.h"
 #include "utility_window.h"
+#include "resource.h"
 
 #include <algorithm>
 #include <array>
@@ -527,7 +528,10 @@ bool AddTrayIcon(HWND hwnd) {
     g_tray.uID = kTrayId;
     g_tray.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
     g_tray.uCallbackMessage = kTrayCallback;
-    g_tray.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    g_tray.hIcon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    if (g_tray.hIcon == nullptr) {
+        g_tray.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
+    }
     wcscpy_s(g_tray.szTip, kAppName);
 
     if (Shell_NotifyIconW(NIM_ADD, &g_tray) == FALSE) {
@@ -879,13 +883,15 @@ void DrawMagnifier(HDC hdc, int cursorX, int cursorY) {
     const std::wstring rgb = RgbString(color);
 
     wchar_t modeBuffer[80]{};
+    const std::wstring modeFormat = dkl10n::Text(L"picker.mode");
+    const std::wstring formatLabel = CopyFormatDisplayName(CurrentCopyFormat());
     swprintf_s(
         modeBuffer,
-        L"확대 %dx · 평균 %dx%d · 복사 %s",
+        modeFormat.c_str(),
         g_settings.zoom,
         g_settings.averageSize,
         g_settings.averageSize,
-        dkcolor::CopyFormatLabel(CurrentCopyFormat()));
+        formatLabel.c_str());
 
     RECT hexRect{
         layout.left + 50,
@@ -918,9 +924,10 @@ void DrawMagnifier(HDC hdc, int cursorX, int cursorY) {
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     SetTextColor(hdc, RGB(190, 190, 190));
+    const std::wstring hintText = dkl10n::Text(L"picker.hint");
     DrawTextW(
         hdc,
-        L"휠/± 확대 · 1/3/5/7/9 평균 · 방향키 이동 · Enter 선택",
+        hintText.c_str(),
         -1,
         &hintRect,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
@@ -1056,9 +1063,10 @@ void StartPicking() {
     }
 
     if (!CaptureDesktop()) {
+        const std::wstring message = dkl10n::Text(L"dialog.capture_failed");
         MessageBoxW(
             g_messageWindow,
-            L"화면을 캡처하지 못했습니다.",
+            message.c_str(),
             kAppName,
             MB_OK | MB_ICONERROR);
         return;
@@ -1116,7 +1124,7 @@ LRESULT CALLBACK TemplateEditorProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         HWND title = CreateWindowExW(
             0,
             L"STATIC",
-            L"사용자 정의 복사 템플릿",
+            dkl10n::Text(L"template.heading").c_str(),
             WS_CHILD | WS_VISIBLE,
             16,
             14,
@@ -1145,10 +1153,11 @@ LRESULT CALLBACK TemplateEditorProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             0,
             L"STATIC",
             L"{hex} {rgb} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}\r\n"
-            L"구성요소: {r} {g} {b}, {hsl_h} {hsl_s} {hsl_l}, "
-            L"{hsv_h} {hsv_s} {hsv_v}, {hwb_h} {hwb_w} {hwb_b},\r\n"
-            L"{cmyk_c} {cmyk_m} {cmyk_y} {cmyk_k}, "
-            L"{lab_l} {lab_a} {lab_b}, {oklch_l} {oklch_c} {oklch_h}",
+            (dkl10n::Text(L"template.components") +
+             L": {r} {g} {b}, {hsl_h} {hsl_s} {hsl_l}, "
+             L"{hsv_h} {hsv_s} {hsv_v}, {hwb_h} {hwb_w} {hwb_b},\r\n"
+             L"{cmyk_c} {cmyk_m} {cmyk_y} {cmyk_k}, "
+             L"{lab_l} {lab_a} {lab_b}, {oklch_l} {oklch_c} {oklch_h}").c_str(),
             WS_CHILD | WS_VISIBLE,
             16,
             76,
@@ -1162,7 +1171,7 @@ LRESULT CALLBACK TemplateEditorProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         HWND okButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"저장",
+            dkl10n::Text(L"template.save").c_str(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
             390,
             154,
@@ -1176,7 +1185,7 @@ LRESULT CALLBACK TemplateEditorProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         HWND cancelButton = CreateWindowExW(
             0,
             L"BUTTON",
-            L"취소",
+            dkl10n::Text(L"template.cancel").c_str(),
             WS_CHILD | WS_VISIBLE | WS_TABSTOP,
             488,
             154,
@@ -1262,7 +1271,7 @@ bool ShowTemplateEditor(HWND owner) {
     HWND window = CreateWindowExW(
         WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT,
         kTemplateClass,
-        L"DK Color Picker - 사용자 템플릿",
+        dkl10n::Text(L"template.title").c_str(),
         WS_CAPTION | WS_SYSMENU,
         x,
         y,
@@ -1615,18 +1624,22 @@ LRESULT CALLBACK MessageProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 g_settings.hotkeyPreset = 0;
                 if (RegisterCurrentHotkey(hwnd)) {
                     SaveSettings();
+                    const std::wstring message =
+                        dkl10n::Text(L"dialog.hotkey_fallback");
                     MessageBoxW(
                         hwnd,
-                        L"저장된 전역 단축키를 등록할 수 없어 Ctrl+Alt+C로 되돌렸습니다.",
+                        message.c_str(),
                         kAppName,
                         MB_OK | MB_ICONWARNING);
                     return 0;
                 }
             }
 
+            const std::wstring message =
+                dkl10n::Text(L"dialog.hotkey_unavailable");
             MessageBoxW(
                 hwnd,
-                L"전역 단축키를 등록하지 못했습니다.\n트레이 메뉴에서는 색 추출을 계속 사용할 수 있습니다.",
+                message.c_str(),
                 kAppName,
                 MB_OK | MB_ICONWARNING);
         }
@@ -1669,6 +1682,8 @@ bool RegisterWindowClasses() {
     messageClass.lpfnWndProc = MessageProc;
     messageClass.lpszClassName = kMessageClass;
     messageClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    messageClass.hIcon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    messageClass.hIconSm = messageClass.hIcon;
 
     if (RegisterClassExW(&messageClass) == 0) {
         return false;
@@ -1691,6 +1706,8 @@ bool RegisterWindowClasses() {
     templateClass.lpfnWndProc = TemplateEditorProc;
     templateClass.lpszClassName = kTemplateClass;
     templateClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    templateClass.hIcon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    templateClass.hIconSm = templateClass.hIcon;
     templateClass.hbrBackground =
         reinterpret_cast<HBRUSH>(static_cast<INT_PTR>(COLOR_WINDOW + 1));
 
