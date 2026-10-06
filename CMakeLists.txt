@@ -4,6 +4,8 @@ project(DKColorPicker VERSION 0.1.0 LANGUAGES CXX)
 
 add_executable(DKColorPicker WIN32
     src/main.cpp
+    src/color_formats.cpp
+    src/color_formats.h
 )
 
 target_compile_features(DKColorPicker PRIVATE cxx_std_20)
