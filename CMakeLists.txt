@@ -8,6 +8,8 @@ add_executable(DKColorPicker WIN32
     src/color_formats.h
     src/color_tools.cpp
     src/color_tools.h
+    src/color_library.cpp
+    src/color_library.h
     src/utility_window.cpp
     src/utility_window.h
 )
@@ -23,6 +25,7 @@ target_compile_definitions(DKColorPicker PRIVATE
 
 target_link_libraries(DKColorPicker PRIVATE
     advapi32
+    comdlg32
     gdi32
     shell32
     user32
