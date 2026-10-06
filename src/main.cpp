@@ -514,8 +514,14 @@ void InvalidateMagnifier(HWND hwnd, POINT point) {
 }
 
 void SetCursorPoint(HWND hwnd, POINT point, bool moveSystemCursor) {
-    point.x = std::clamp(point.x, 0, std::max(0, g_capture.width - 1));
-    point.y = std::clamp(point.y, 0, std::max(0, g_capture.height - 1));
+    point.x = std::clamp<LONG>(
+        point.x,
+        0,
+        static_cast<LONG>(std::max(0, g_capture.width - 1)));
+    point.y = std::clamp<LONG>(
+        point.y,
+        0,
+        static_cast<LONG>(std::max(0, g_capture.height - 1)));
 
     if (g_hasCursorPoint) {
         InvalidateMagnifier(hwnd, g_cursorPoint);
