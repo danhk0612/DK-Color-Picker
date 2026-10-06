@@ -2,6 +2,8 @@
 #include <windowsx.h>
 #include <shellapi.h>
 
+#include "color_formats.h"
+
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -14,6 +16,7 @@ namespace {
 constexpr wchar_t kAppName[] = L"DK Color Picker";
 constexpr wchar_t kMessageClass[] = L"DKColorPicker.MessageWindow";
 constexpr wchar_t kOverlayClass[] = L"DKColorPicker.PickerOverlay";
+constexpr wchar_t kTemplateClass[] = L"DKColorPicker.TemplateEditor";
 constexpr wchar_t kRunKey[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 constexpr wchar_t kRunValue[] = L"DKColorPicker";
 constexpr wchar_t kMutexName[] = L"Local\\DKColorPicker.SingleInstance";
@@ -28,6 +31,10 @@ constexpr UINT kMenuExit = 1003;
 constexpr UINT kMenuZoomBase = 1100;
 constexpr UINT kMenuAverageBase = 1200;
 constexpr UINT kMenuHotkeyBase = 1300;
+constexpr UINT kMenuFormatBase = 1400;
+constexpr UINT kMenuEditTemplate = 1500;
+
+constexpr int kTemplateEditId = 2001;
 
 constexpr std::array<int, 6> kZoomLevels{8, 12, 16, 24, 32, 48};
 constexpr std::array<int, 5> kAverageSizes{1, 3, 5, 7, 9};
@@ -50,6 +57,14 @@ struct Settings {
     int zoom = 12;
     int averageSize = 1;
     int hotkeyPreset = 0;
+    int copyFormat = static_cast<int>(dkcolor::CopyFormat::Hex);
+    std::wstring customTemplate = dkcolor::DefaultCustomTemplate();
+};
+
+struct TemplateEditorState {
+    HWND edit = nullptr;
+    bool accepted = false;
+    std::wstring value;
 };
 
 struct DesktopCapture {
@@ -124,10 +139,17 @@ void SaveSettings() {
     const std::wstring zoom = std::to_wstring(g_settings.zoom);
     const std::wstring average = std::to_wstring(g_settings.averageSize);
     const std::wstring hotkey = std::to_wstring(g_settings.hotkeyPreset);
+    const std::wstring copyFormat = std::to_wstring(g_settings.copyFormat);
 
     WritePrivateProfileStringW(L"Picker", L"Zoom", zoom.c_str(), path.c_str());
     WritePrivateProfileStringW(L"Picker", L"AverageSize", average.c_str(), path.c_str());
     WritePrivateProfileStringW(L"Hotkey", L"Preset", hotkey.c_str(), path.c_str());
+    WritePrivateProfileStringW(L"Copy", L"Format", copyFormat.c_str(), path.c_str());
+    WritePrivateProfileStringW(
+        L"Copy",
+        L"Template",
+        g_settings.customTemplate.c_str(),
+        path.c_str());
 }
 
 void LoadSettings() {
@@ -142,6 +164,18 @@ void LoadSettings() {
         GetPrivateProfileIntW(L"Picker", L"AverageSize", g_settings.averageSize, path.c_str()));
     const int hotkey = static_cast<int>(
         GetPrivateProfileIntW(L"Hotkey", L"Preset", g_settings.hotkeyPreset, path.c_str()));
+    const int copyFormat = static_cast<int>(
+        GetPrivateProfileIntW(L"Copy", L"Format", g_settings.copyFormat, path.c_str()));
+
+    std::array<wchar_t, 2049> customTemplate{};
+    const std::wstring defaultTemplate = dkcolor::DefaultCustomTemplate();
+    GetPrivateProfileStringW(
+        L"Copy",
+        L"Template",
+        defaultTemplate.c_str(),
+        customTemplate.data(),
+        static_cast<DWORD>(customTemplate.size()),
+        path.c_str());
 
     if (Contains(kZoomLevels, zoom)) {
         g_settings.zoom = zoom;
@@ -152,6 +186,11 @@ void LoadSettings() {
     if (hotkey >= 0 && hotkey < static_cast<int>(kHotkeyPresets.size())) {
         g_settings.hotkeyPreset = hotkey;
     }
+    if (copyFormat >= 0 &&
+        copyFormat < static_cast<int>(dkcolor::CopyFormat::Count)) {
+        g_settings.copyFormat = copyFormat;
+    }
+    g_settings.customTemplate = customTemplate.data();
 }
 
 void ReleaseDesktopCapture() {
@@ -599,9 +638,20 @@ void CancelPicking() {
     g_hasCursorPoint = false;
 }
 
+dkcolor::CopyFormat CurrentCopyFormat() {
+    const int value = g_settings.copyFormat;
+    if (value < 0 || value >= static_cast<int>(dkcolor::CopyFormat::Count)) {
+        return dkcolor::CopyFormat::Hex;
+    }
+    return static_cast<dkcolor::CopyFormat>(value);
+}
+
 void FinishPicking(HWND hwnd, int x, int y) {
     const COLORREF color = SampleColorAt(x, y);
-    const std::wstring text = HexString(color);
+    const std::wstring text = dkcolor::FormatColor(
+        color,
+        CurrentCopyFormat(),
+        g_settings.customTemplate);
     CopyTextToClipboard(hwnd, text);
     CancelPicking();
 }
@@ -710,10 +760,11 @@ void DrawMagnifier(HDC hdc, int cursorX, int cursorY) {
     wchar_t modeBuffer[80]{};
     swprintf_s(
         modeBuffer,
-        L"확대 %dx · 평균 %dx%d",
+        L"확대 %dx · 평균 %dx%d · 복사 %s",
         g_settings.zoom,
         g_settings.averageSize,
-        g_settings.averageSize);
+        g_settings.averageSize,
+        dkcolor::CopyFormatLabel(CurrentCopyFormat()));
 
     RECT hexRect{
         layout.left + 50,
@@ -738,7 +789,12 @@ void DrawMagnifier(HDC hdc, int cursorX, int cursorY) {
 
     DrawTextW(hdc, hex.c_str(), -1, &hexRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
     DrawTextW(hdc, rgb.c_str(), -1, &rgbRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-    DrawTextW(hdc, modeBuffer, -1, &modeRect, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+    DrawTextW(
+        hdc,
+        modeBuffer,
+        -1,
+        &modeRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     SetTextColor(hdc, RGB(190, 190, 190));
     DrawTextW(
@@ -914,6 +970,231 @@ void StartPicking() {
     UpdateCursorPointFromSystem(g_overlayWindow);
 }
 
+
+LRESULT CALLBACK TemplateEditorProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    auto* state = reinterpret_cast<TemplateEditorState*>(
+        GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
+    if (message == WM_NCCREATE) {
+        const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+        state = static_cast<TemplateEditorState*>(create->lpCreateParams);
+        SetWindowLongPtrW(
+            hwnd,
+            GWLP_USERDATA,
+            reinterpret_cast<LONG_PTR>(state));
+    }
+
+    switch (message) {
+    case WM_CREATE: {
+        if (state == nullptr) {
+            return -1;
+        }
+
+        HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+
+        HWND title = CreateWindowExW(
+            0,
+            L"STATIC",
+            L"사용자 정의 복사 템플릿",
+            WS_CHILD | WS_VISIBLE,
+            16,
+            14,
+            560,
+            20,
+            hwnd,
+            nullptr,
+            g_instance,
+            nullptr);
+
+        state->edit = CreateWindowExW(
+            WS_EX_CLIENTEDGE,
+            L"EDIT",
+            state->value.c_str(),
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
+            16,
+            40,
+            560,
+            26,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kTemplateEditId)),
+            g_instance,
+            nullptr);
+
+        HWND help = CreateWindowExW(
+            0,
+            L"STATIC",
+            L"{hex} {rgb} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}\r\n"
+            L"구성요소: {r} {g} {b}, {hsl_h} {hsl_s} {hsl_l}, "
+            L"{hsv_h} {hsv_s} {hsv_v}, {hwb_h} {hwb_w} {hwb_b},\r\n"
+            L"{cmyk_c} {cmyk_m} {cmyk_y} {cmyk_k}, "
+            L"{lab_l} {lab_a} {lab_b}, {oklch_l} {oklch_c} {oklch_h}",
+            WS_CHILD | WS_VISIBLE,
+            16,
+            76,
+            560,
+            66,
+            hwnd,
+            nullptr,
+            g_instance,
+            nullptr);
+
+        HWND okButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"저장",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+            390,
+            154,
+            88,
+            28,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDOK)),
+            g_instance,
+            nullptr);
+
+        HWND cancelButton = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"취소",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            488,
+            154,
+            88,
+            28,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDCANCEL)),
+            g_instance,
+            nullptr);
+
+        const std::array<HWND, 5> controls{
+            title, state->edit, help, okButton, cancelButton};
+        for (HWND control : controls) {
+            if (control != nullptr) {
+                SendMessageW(
+                    control,
+                    WM_SETFONT,
+                    reinterpret_cast<WPARAM>(font),
+                    TRUE);
+            }
+        }
+
+        if (state->edit != nullptr) {
+            SendMessageW(state->edit, EM_SETLIMITTEXT, 2048, 0);
+            SetFocus(state->edit);
+            SendMessageW(state->edit, EM_SETSEL, 0, -1);
+        }
+        return 0;
+    }
+
+    case WM_COMMAND:
+        if (LOWORD(wParam) == IDOK && state != nullptr && state->edit != nullptr) {
+            const int length = GetWindowTextLengthW(state->edit);
+            std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
+            GetWindowTextW(state->edit, value.data(), length + 1);
+            value.resize(static_cast<std::size_t>(length));
+            state->value = std::move(value);
+            state->accepted = true;
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        if (LOWORD(wParam) == IDCANCEL) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+
+    case WM_CLOSE:
+        DestroyWindow(hwnd);
+        return 0;
+    }
+
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
+bool ShowTemplateEditor(HWND owner) {
+    TemplateEditorState state;
+    state.value = g_settings.customTemplate;
+
+    constexpr int clientWidth = 592;
+    constexpr int clientHeight = 198;
+    RECT rect{0, 0, clientWidth, clientHeight};
+    AdjustWindowRectEx(
+        &rect,
+        WS_CAPTION | WS_SYSMENU,
+        FALSE,
+        WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT);
+
+    const int width = rect.right - rect.left;
+    const int height = rect.bottom - rect.top;
+
+    POINT cursor{};
+    GetCursorPos(&cursor);
+    const HMONITOR monitor = MonitorFromPoint(cursor, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+    GetMonitorInfoW(monitor, &monitorInfo);
+
+    const RECT work = monitorInfo.rcWork;
+    const int x = work.left + ((work.right - work.left) - width) / 2;
+    const int y = work.top + ((work.bottom - work.top) - height) / 2;
+
+    HWND window = CreateWindowExW(
+        WS_EX_DLGMODALFRAME | WS_EX_CONTROLPARENT,
+        kTemplateClass,
+        L"DK Color Picker - 사용자 템플릿",
+        WS_CAPTION | WS_SYSMENU,
+        x,
+        y,
+        width,
+        height,
+        owner,
+        nullptr,
+        g_instance,
+        &state);
+
+    if (window == nullptr) {
+        return false;
+    }
+
+    EnableWindow(owner, FALSE);
+    ShowWindow(window, SW_SHOW);
+    SetForegroundWindow(window);
+
+    bool sawQuit = false;
+    int quitCode = 0;
+    MSG message{};
+    while (IsWindow(window)) {
+        const BOOL result = GetMessageW(&message, nullptr, 0, 0);
+        if (result <= 0) {
+            if (result == 0) {
+                sawQuit = true;
+                quitCode = static_cast<int>(message.wParam);
+            }
+            break;
+        }
+
+        if (!IsDialogMessageW(window, &message)) {
+            TranslateMessage(&message);
+            DispatchMessageW(&message);
+        }
+    }
+
+    EnableWindow(owner, TRUE);
+    SetForegroundWindow(owner);
+
+    if (sawQuit) {
+        PostQuitMessage(quitCode);
+    }
+
+    if (!state.accepted) {
+        return false;
+    }
+
+    g_settings.customTemplate = state.value;
+    SaveSettings();
+    return true;
+}
+
 void AppendCheckedMenuItem(
     HMENU menu,
     UINT command,
@@ -927,8 +1208,13 @@ void ShowTrayMenu(HWND hwnd) {
     HMENU zoomMenu = CreatePopupMenu();
     HMENU averageMenu = CreatePopupMenu();
     HMENU hotkeyMenu = CreatePopupMenu();
+    HMENU formatMenu = CreatePopupMenu();
 
-    if (menu == nullptr || zoomMenu == nullptr || averageMenu == nullptr || hotkeyMenu == nullptr) {
+    if (menu == nullptr ||
+        zoomMenu == nullptr ||
+        averageMenu == nullptr ||
+        hotkeyMenu == nullptr ||
+        formatMenu == nullptr) {
         if (menu != nullptr) {
             DestroyMenu(menu);
         }
@@ -940,6 +1226,9 @@ void ShowTrayMenu(HWND hwnd) {
         }
         if (hotkeyMenu != nullptr) {
             DestroyMenu(hotkeyMenu);
+        }
+        if (formatMenu != nullptr) {
+            DestroyMenu(formatMenu);
         }
         return;
     }
@@ -976,6 +1265,22 @@ void ShowTrayMenu(HWND hwnd) {
             g_settings.hotkeyPreset == static_cast<int>(i));
     }
 
+    const UINT formatCount = static_cast<UINT>(dkcolor::CopyFormat::Count);
+    for (UINT i = 0; i < formatCount; ++i) {
+        const auto format = static_cast<dkcolor::CopyFormat>(i);
+        AppendCheckedMenuItem(
+            formatMenu,
+            kMenuFormatBase + i,
+            dkcolor::CopyFormatLabel(format),
+            g_settings.copyFormat == static_cast<int>(i));
+    }
+    AppendMenuW(formatMenu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(
+        formatMenu,
+        MF_STRING,
+        kMenuEditTemplate,
+        L"사용자 템플릿 편집...");
+
     AppendMenuW(
         menu,
         MF_POPUP,
@@ -986,6 +1291,11 @@ void ShowTrayMenu(HWND hwnd) {
         MF_POPUP,
         reinterpret_cast<UINT_PTR>(averageMenu),
         L"평균 추출");
+    AppendMenuW(
+        menu,
+        MF_POPUP,
+        reinterpret_cast<UINT_PTR>(formatMenu),
+        L"복사 형식");
     AppendMenuW(
         menu,
         MF_POPUP,
@@ -1045,9 +1355,20 @@ void ShowTrayMenu(HWND hwnd) {
         return;
     }
 
+    if (selected >= kMenuFormatBase &&
+        selected < kMenuFormatBase + formatCount) {
+        g_settings.copyFormat = static_cast<int>(selected - kMenuFormatBase);
+        SaveSettings();
+        return;
+    }
+
     switch (selected) {
     case kMenuPick:
         StartPicking();
+        break;
+
+    case kMenuEditTemplate:
+        ShowTemplateEditor(hwnd);
         break;
 
     case kMenuAutoStart: {
@@ -1144,7 +1465,20 @@ bool RegisterWindowClasses() {
     overlayClass.lpszClassName = kOverlayClass;
     overlayClass.hCursor = LoadCursorW(nullptr, IDC_CROSS);
 
-    return RegisterClassExW(&overlayClass) != 0;
+    if (RegisterClassExW(&overlayClass) == 0) {
+        return false;
+    }
+
+    WNDCLASSEXW templateClass{};
+    templateClass.cbSize = sizeof(templateClass);
+    templateClass.hInstance = g_instance;
+    templateClass.lpfnWndProc = TemplateEditorProc;
+    templateClass.lpszClassName = kTemplateClass;
+    templateClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    templateClass.hbrBackground =
+        reinterpret_cast<HBRUSH>(static_cast<INT_PTR>(COLOR_WINDOW + 1));
+
+    return RegisterClassExW(&templateClass) != 0;
 }
 
 } // namespace
