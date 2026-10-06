@@ -33,14 +33,18 @@ Status: implemented on task/t02-picker-quality
 
 ## T03 - Color formats
 
+Status: implemented on task/t03-color-formats
+
 - HEX
 - RGB
 - HSL / HSV / HWB
 - CMYK
-- CIELAB
-- OKLCH
-- User-defined copy template
-- Copy-format selection
+- CIELAB using D65 sRGB conversion
+- OKLCH using linear sRGB -> Oklab conversion
+- User-defined copy template with whole-format and component placeholders
+- Native template editor window
+- Copy-format selection from the tray menu
+- Persisted copy format and custom template
 
 ## T04 - Main utility UI
 
