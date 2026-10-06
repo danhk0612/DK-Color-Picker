@@ -3,6 +3,7 @@
 #include <shellapi.h>
 
 #include "color_formats.h"
+#include "utility_window.h"
 
 #include <algorithm>
 #include <array>
@@ -29,6 +30,7 @@ constexpr UINT kTrayId = 1;
 constexpr UINT kMenuPick = 1001;
 constexpr UINT kMenuAutoStart = 1002;
 constexpr UINT kMenuExit = 1003;
+constexpr UINT kMenuOpenTools = 1004;
 constexpr UINT kMenuZoomBase = 1100;
 constexpr UINT kMenuAverageBase = 1200;
 constexpr UINT kMenuHotkeyBase = 1300;
@@ -100,6 +102,7 @@ struct MagnifierLayout {
 HINSTANCE g_instance = nullptr;
 HWND g_messageWindow = nullptr;
 HWND g_overlayWindow = nullptr;
+HWND g_utilityWindow = nullptr;
 NOTIFYICONDATAW g_tray{};
 HANDLE g_mutex = nullptr;
 
@@ -108,6 +111,7 @@ Settings g_settings;
 POINT g_cursorPoint{0, 0};
 bool g_hasCursorPoint = false;
 bool g_hotkeyRegistered = false;
+COLORREF g_currentColor = RGB(59, 130, 246);
 
 template <typename T, std::size_t N>
 bool Contains(const std::array<T, N>& values, const T& value) {
@@ -628,6 +632,25 @@ void SetAverageSize(HWND hwnd, int averageSize) {
     }
 }
 
+
+void OnUtilityColorChanged(COLORREF color) {
+    g_currentColor = color;
+}
+
+void OpenUtilityWindow() {
+    if (g_utilityWindow == nullptr || !IsWindow(g_utilityWindow)) {
+        g_utilityWindow = dkcolorui::CreateUtilityWindow(
+            g_instance,
+            g_messageWindow,
+            g_currentColor,
+            OnUtilityColorChanged);
+    }
+
+    if (g_utilityWindow != nullptr) {
+        dkcolorui::ShowUtilityWindow(g_utilityWindow, g_currentColor);
+    }
+}
+
 void CancelPicking() {
     if (g_overlayWindow != nullptr) {
         HWND overlay = g_overlayWindow;
@@ -649,6 +672,12 @@ dkcolor::CopyFormat CurrentCopyFormat() {
 
 void FinishPicking(HWND hwnd, int x, int y) {
     const COLORREF color = SampleColorAt(x, y);
+    g_currentColor = color;
+
+    if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
+        dkcolorui::SetUtilityWindowColor(g_utilityWindow, color);
+    }
+
     const std::wstring text = dkcolor::FormatColor(
         color,
         CurrentCopyFormat(),
@@ -1237,6 +1266,7 @@ void ShowTrayMenu(HWND hwnd) {
     std::wstring pickLabel = L"색 추출\t";
     pickLabel += CurrentHotkey().label;
     AppendMenuW(menu, MF_STRING, kMenuPick, pickLabel.c_str());
+    AppendMenuW(menu, MF_STRING, kMenuOpenTools, L"색상 도구 열기");
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
     for (std::size_t i = 0; i < kZoomLevels.size(); ++i) {
@@ -1368,6 +1398,10 @@ void ShowTrayMenu(HWND hwnd) {
         StartPicking();
         break;
 
+    case kMenuOpenTools:
+        OpenUtilityWindow();
+        break;
+
     case kMenuEditTemplate:
         ShowTemplateEditor(hwnd);
         break;
@@ -1432,12 +1466,16 @@ LRESULT CALLBACK MessageProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             LOWORD(lParam) == WM_CONTEXTMENU) {
             ShowTrayMenu(hwnd);
         } else if (LOWORD(lParam) == WM_LBUTTONDBLCLK) {
-            StartPicking();
+            OpenUtilityWindow();
         }
         return 0;
 
     case WM_DESTROY:
         CancelPicking();
+        if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
+            DestroyWindow(g_utilityWindow);
+            g_utilityWindow = nullptr;
+        }
         UnregisterCurrentHotkey(hwnd);
         RemoveTrayIcon();
         PostQuitMessage(0);
@@ -1479,7 +1517,11 @@ bool RegisterWindowClasses() {
     templateClass.hbrBackground =
         reinterpret_cast<HBRUSH>(static_cast<INT_PTR>(COLOR_WINDOW + 1));
 
-    return RegisterClassExW(&templateClass) != 0;
+    if (RegisterClassExW(&templateClass) == 0) {
+        return false;
+    }
+
+    return dkcolorui::RegisterUtilityWindowClass(g_instance);
 }
 
 } // namespace
