@@ -15,7 +15,7 @@ struct Entry {
     const wchar_t* en;
 };
 
-constexpr std::array<Entry, 45> kEntries{{
+constexpr std::array<Entry, 49> kEntries{{
     {L"app.title", L"DK Color Picker", L"DK Color Picker"},
     {L"tray.pick", L"색 추출", L"Pick color"},
     {L"tray.tools", L"색상 도구 열기", L"Open color tools"},
@@ -60,7 +60,11 @@ constexpr std::array<Entry, 45> kEntries{{
     {L"template.heading", L"사용자 정의 복사 템플릿", L"Custom copy template"},
     {L"template.save", L"저장", L"Save"},
     {L"template.cancel", L"취소", L"Cancel"},
+    {L"template.components", L"구성요소", L"Components"},
+    {L"picker.mode", L"확대 %dx · 평균 %dx%d · 복사 %s", L"Zoom %dx · average %dx%d · copy %s"},
     {L"picker.hint", L"휠/± 확대 · 1/3/5/7/9 평균 · 방향키 이동 · Enter 선택", L"Wheel/± zoom · 1/3/5/7/9 average · arrows move · Enter select"},
+    {L"dialog.hotkey_fallback", L"저장된 전역 단축키를 등록할 수 없어 Ctrl+Alt+C로 되돌렸습니다.", L"The saved global hotkey could not be registered, so Ctrl+Alt+C was restored."},
+    {L"dialog.hotkey_unavailable", L"전역 단축키를 등록하지 못했습니다.\n트레이 메뉴에서는 색 추출을 계속 사용할 수 있습니다.", L"Could not register a global hotkey.\nColor picking is still available from the tray menu."},
 }};
 
 Language g_language = Language::Korean;
