@@ -8,6 +8,7 @@
 #include "color_tools.h"
 #include "localization.h"
 #include "theme.h"
+#include "resource.h"
 
 #include <array>
 #include <cwchar>
@@ -1156,6 +1157,8 @@ bool RegisterUtilityWindowClass(HINSTANCE instance) {
     windowClass.lpfnWndProc = UtilityProc;
     windowClass.lpszClassName = kUtilityClass;
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    windowClass.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    windowClass.hIconSm = windowClass.hIcon;
     windowClass.hbrBackground = nullptr;
 
     return RegisterClassExW(&windowClass) != 0;
