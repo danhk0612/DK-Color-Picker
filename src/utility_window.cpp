@@ -1,13 +1,16 @@
 #include "utility_window.h"
 
 #include <windowsx.h>
+#include <commdlg.h>
 
 #include "color_formats.h"
+#include "color_library.h"
 #include "color_tools.h"
 
 #include <array>
 #include <cwchar>
 #include <string>
+#include <vector>
 
 namespace dkcolorui {
 namespace {
@@ -15,16 +18,35 @@ namespace {
 constexpr wchar_t kUtilityClass[] = L"DKColorPicker.UtilityWindow";
 constexpr int kInputId = 3001;
 constexpr int kApplyId = 3002;
+constexpr int kFavoriteId = 3003;
+constexpr int kClearRecentId = 3004;
+constexpr int kExportCssId = 3010;
+constexpr int kExportJsonId = 3011;
+constexpr int kExportTailwindId = 3012;
+constexpr int kExportGimpId = 3013;
 
 struct UtilityState {
     HWND input = nullptr;
     HWND apply = nullptr;
+    HWND favorite = nullptr;
+    HWND clearRecent = nullptr;
+    HWND exportCss = nullptr;
+    HWND exportJson = nullptr;
+    HWND exportTailwind = nullptr;
+    HWND exportGimp = nullptr;
+
     COLORREF color = RGB(59, 130, 246);
     ColorChangedCallback onColorChanged = nullptr;
+
     std::array<RECT, 5> toneRects{};
     std::array<RECT, 5> harmonyRects{};
     std::array<COLORREF, 5> tones{};
     std::array<COLORREF, 5> harmonies{};
+
+    std::array<RECT, dkcolorlib::kMaxRecentColors> recentRects{};
+    std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
+    std::vector<COLORREF> recentColors;
+    std::vector<COLORREF> favoriteColors;
 };
 
 int Scale(HWND hwnd, int value) {
@@ -48,16 +70,27 @@ std::wstring ContrastGrade(double ratio) {
     return L"WCAG AA 대비 기준 미달";
 }
 
+void SetControlFont(HWND control, HFONT font) {
+    if (control != nullptr) {
+        SendMessageW(
+            control,
+            WM_SETFONT,
+            reinterpret_cast<WPARAM>(font),
+            TRUE);
+    }
+}
+
 void LayoutControls(HWND hwnd, UtilityState* state) {
     if (state == nullptr) {
         return;
     }
 
     const int margin = Scale(hwnd, 20);
-    const int top = Scale(hwnd, 18);
-    const int inputWidth = Scale(hwnd, 390);
+    const int top = Scale(hwnd, 16);
+    const int inputWidth = Scale(hwnd, 330);
     const int inputHeight = Scale(hwnd, 28);
-    const int buttonWidth = Scale(hwnd, 86);
+    const int buttonWidth = Scale(hwnd, 76);
+    const int favoriteWidth = Scale(hwnd, 142);
     const int gap = Scale(hwnd, 8);
 
     MoveWindow(
@@ -75,6 +108,74 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
         buttonWidth,
         inputHeight,
         TRUE);
+
+    MoveWindow(
+        state->favorite,
+        margin + inputWidth + gap + buttonWidth + gap,
+        top,
+        favoriteWidth,
+        inputHeight,
+        TRUE);
+
+    const int actionY = Scale(hwnd, 655);
+    const int smallButton = Scale(hwnd, 112);
+
+    MoveWindow(
+        state->clearRecent,
+        margin,
+        actionY,
+        smallButton,
+        Scale(hwnd, 28),
+        TRUE);
+
+    MoveWindow(
+        state->exportCss,
+        margin + Scale(hwnd, 250),
+        actionY,
+        Scale(hwnd, 104),
+        Scale(hwnd, 28),
+        TRUE);
+
+    MoveWindow(
+        state->exportJson,
+        margin + Scale(hwnd, 360),
+        actionY,
+        Scale(hwnd, 86),
+        Scale(hwnd, 28),
+        TRUE);
+
+    MoveWindow(
+        state->exportTailwind,
+        margin + Scale(hwnd, 452),
+        actionY,
+        Scale(hwnd, 112),
+        Scale(hwnd, 28),
+        TRUE);
+
+    MoveWindow(
+        state->exportGimp,
+        margin + Scale(hwnd, 570),
+        actionY,
+        Scale(hwnd, 110),
+        Scale(hwnd, 28),
+        TRUE);
+}
+
+void RefreshLibraryState(UtilityState* state) {
+    if (state == nullptr) {
+        return;
+    }
+
+    state->recentColors = dkcolorlib::LoadRecentColors();
+    state->favoriteColors = dkcolorlib::LoadFavoriteColors();
+
+    if (state->favorite != nullptr) {
+        SetWindowTextW(
+            state->favorite,
+            dkcolorlib::IsFavoriteColor(state->color)
+                ? L"즐겨찾기 제거"
+                : L"즐겨찾기 추가");
+    }
 }
 
 void UpdateInput(UtilityState* state) {
@@ -84,13 +185,23 @@ void UpdateInput(UtilityState* state) {
     }
 }
 
-void SetColorInternal(HWND hwnd, UtilityState* state, COLORREF color, bool notify) {
+void SetColorInternal(
+    HWND hwnd,
+    UtilityState* state,
+    COLORREF color,
+    bool notify,
+    bool addRecent) {
     if (state == nullptr) {
         return;
     }
 
     state->color = color;
+    if (addRecent) {
+        dkcolorlib::AddRecentColor(color);
+    }
+
     UpdateInput(state);
+    RefreshLibraryState(state);
     InvalidateRect(hwnd, nullptr, TRUE);
 
     if (notify && state->onColorChanged != nullptr) {
@@ -117,7 +228,8 @@ void DrawSwatch(
     const RECT& rect,
     COLORREF color,
     const std::wstring& label,
-    HFONT font) {
+    HFONT font,
+    bool compact = false) {
     HBRUSH brush = CreateSolidBrush(color);
     FillRect(hdc, &rect, brush);
     DeleteObject(brush);
@@ -140,9 +252,201 @@ void DrawSwatch(
         label.c_str(),
         -1,
         &textRect,
-        DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        DT_CENTER | DT_VCENTER | DT_SINGLELINE |
+            (compact ? DT_END_ELLIPSIS : 0));
 
     SelectObject(hdc, oldFont);
+}
+
+void DrawLibrarySwatches(
+    HWND hwnd,
+    HDC hdc,
+    HFONT font,
+    const std::vector<COLORREF>& colors,
+    RECT* rects,
+    std::size_t rectCount,
+    int top) {
+    const int margin = Scale(hwnd, 20);
+    const int gap = Scale(hwnd, 6);
+    const int usableWidth = Scale(hwnd, 720);
+    constexpr int columns = 10;
+    const int swatchWidth =
+        (usableWidth - gap * (columns - 1)) / columns;
+    const int swatchHeight = Scale(hwnd, 38);
+    const int rowGap = Scale(hwnd, 6);
+
+    for (std::size_t index = 0; index < rectCount; ++index) {
+        rects[index] = {};
+    }
+
+    for (std::size_t index = 0;
+         index < colors.size() && index < rectCount;
+         ++index) {
+        const int column = static_cast<int>(index % columns);
+        const int row = static_cast<int>(index / columns);
+        RECT rect{
+            margin + column * (swatchWidth + gap),
+            top + row * (swatchHeight + rowGap),
+            margin + column * (swatchWidth + gap) + swatchWidth,
+            top + row * (swatchHeight + rowGap) + swatchHeight};
+        rects[index] = rect;
+        DrawSwatch(hdc, rect, colors[index], Hex(colors[index]), font, true);
+    }
+}
+
+bool WriteUtf8File(
+    const std::wstring& path,
+    const std::wstring& text) {
+    const int bytesRequired = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        text.c_str(),
+        static_cast<int>(text.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr);
+
+    if (bytesRequired < 0) {
+        return false;
+    }
+
+    std::string utf8(static_cast<std::size_t>(bytesRequired), '\0');
+    if (bytesRequired > 0) {
+        WideCharToMultiByte(
+            CP_UTF8,
+            0,
+            text.c_str(),
+            static_cast<int>(text.size()),
+            utf8.data(),
+            bytesRequired,
+            nullptr,
+            nullptr);
+    }
+
+    HANDLE file = CreateFileW(
+        path.c_str(),
+        GENERIC_WRITE,
+        FILE_SHARE_READ,
+        nullptr,
+        CREATE_ALWAYS,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+
+    if (file == INVALID_HANDLE_VALUE) {
+        return false;
+    }
+
+    DWORD written = 0;
+    const BOOL ok = WriteFile(
+        file,
+        utf8.data(),
+        static_cast<DWORD>(utf8.size()),
+        &written,
+        nullptr);
+    CloseHandle(file);
+
+    return ok != FALSE && written == utf8.size();
+}
+
+bool ChooseExportPath(
+    HWND owner,
+    dkcolorlib::PaletteExportFormat format,
+    std::wstring* path) {
+    if (path == nullptr) {
+        return false;
+    }
+
+    const wchar_t* filter = nullptr;
+    const wchar_t* extension = nullptr;
+    const wchar_t* defaultName = nullptr;
+
+    switch (format) {
+    case dkcolorlib::PaletteExportFormat::CssVariables:
+        filter = L"CSS 파일 (*.css)\0*.css\0모든 파일 (*.*)\0*.*\0";
+        extension = L"css";
+        defaultName = L"dk-color-palette.css";
+        break;
+    case dkcolorlib::PaletteExportFormat::Json:
+        filter = L"JSON 파일 (*.json)\0*.json\0모든 파일 (*.*)\0*.*\0";
+        extension = L"json";
+        defaultName = L"dk-color-palette.json";
+        break;
+    case dkcolorlib::PaletteExportFormat::Tailwind:
+        filter = L"JavaScript 파일 (*.js)\0*.js\0모든 파일 (*.*)\0*.*\0";
+        extension = L"js";
+        defaultName = L"dk-color-tailwind.js";
+        break;
+    case dkcolorlib::PaletteExportFormat::GimpGpl:
+        filter = L"GIMP Palette (*.gpl)\0*.gpl\0모든 파일 (*.*)\0*.*\0";
+        extension = L"gpl";
+        defaultName = L"dk-color-palette.gpl";
+        break;
+    }
+
+    std::array<wchar_t, MAX_PATH> buffer{};
+    wcscpy_s(buffer.data(), buffer.size(), defaultName);
+
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize = sizeof(dialog);
+    dialog.hwndOwner = owner;
+    dialog.lpstrFilter = filter;
+    dialog.lpstrFile = buffer.data();
+    dialog.nMaxFile = static_cast<DWORD>(buffer.size());
+    dialog.lpstrDefExt = extension;
+    dialog.Flags =
+        OFN_OVERWRITEPROMPT |
+        OFN_PATHMUSTEXIST |
+        OFN_NOCHANGEDIR;
+
+    if (GetSaveFileNameW(&dialog) == FALSE) {
+        return false;
+    }
+
+    *path = buffer.data();
+    return true;
+}
+
+void ExportFavorites(
+    HWND hwnd,
+    UtilityState* state,
+    dkcolorlib::PaletteExportFormat format) {
+    if (state == nullptr) {
+        return;
+    }
+
+    RefreshLibraryState(state);
+    if (state->favoriteColors.empty()) {
+        MessageBoxW(
+            hwnd,
+            L"내보낼 즐겨찾기 색상이 없습니다.",
+            L"DK Color Picker",
+            MB_OK | MB_ICONINFORMATION);
+        return;
+    }
+
+    std::wstring path;
+    if (!ChooseExportPath(hwnd, format, &path)) {
+        return;
+    }
+
+    const std::wstring output =
+        dkcolorlib::ExportPaletteText(state->favoriteColors, format);
+
+    if (!WriteUtf8File(path, output)) {
+        MessageBoxW(
+            hwnd,
+            L"팔레트 파일을 저장하지 못했습니다.",
+            L"DK Color Picker",
+            MB_OK | MB_ICONERROR);
+        return;
+    }
+
+    MessageBoxW(
+        hwnd,
+        L"즐겨찾기 팔레트를 저장했습니다.",
+        L"DK Color Picker",
+        MB_OK | MB_ICONINFORMATION);
 }
 
 void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
@@ -150,13 +454,14 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         return;
     }
 
+    RefreshLibraryState(state);
+
     const int margin = Scale(hwnd, 20);
-    const int top = Scale(hwnd, 62);
-    const int cardHeight = Scale(hwnd, 126);
-    const int swatchWidth = Scale(hwnd, 160);
-    const int gap = Scale(hwnd, 12);
-    const int textLeft = margin + swatchWidth + Scale(hwnd, 22);
-    const int rowHeight = Scale(hwnd, 22);
+    const int top = Scale(hwnd, 58);
+    const int cardHeight = Scale(hwnd, 104);
+    const int swatchWidth = Scale(hwnd, 152);
+    const int textLeft = margin + swatchWidth + Scale(hwnd, 20);
+    const int rowHeight = Scale(hwnd, 20);
 
     HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
     HGDIOBJ oldFont = SelectObject(hdc, font);
@@ -201,7 +506,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
     }
 
-    const int tonesTitleY = top + cardHeight + Scale(hwnd, 24);
+    const int tonesTitleY = top + cardHeight + Scale(hwnd, 15);
     RECT tonesTitle{
         margin,
         tonesTitleY,
@@ -209,18 +514,18 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         tonesTitleY + rowHeight};
     DrawTextW(
         hdc,
-        L"톤 단계 — 클릭하면 현재 색상으로 적용",
+        L"톤 단계 — 클릭하여 적용",
         -1,
         &tonesTitle,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
     state->tones = dkcolor::ToneSteps(state->color);
 
-    const int swatchTop = tonesTitleY + Scale(hwnd, 28);
+    const int swatchTop = tonesTitleY + Scale(hwnd, 22);
     const int swatchGap = Scale(hwnd, 8);
     const int usableWidth = Scale(hwnd, 720);
     const int smallSwatchWidth = (usableWidth - swatchGap * 4) / 5;
-    const int smallSwatchHeight = Scale(hwnd, 66);
+    const int smallSwatchHeight = Scale(hwnd, 46);
 
     for (std::size_t index = 0; index < state->tones.size(); ++index) {
         RECT rect{
@@ -232,7 +537,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         DrawSwatch(hdc, rect, state->tones[index], Hex(state->tones[index]), font);
     }
 
-    const int harmonyTitleY = swatchTop + smallSwatchHeight + Scale(hwnd, 24);
+    const int harmonyTitleY = swatchTop + smallSwatchHeight + Scale(hwnd, 14);
     RECT harmonyTitle{
         margin,
         harmonyTitleY,
@@ -254,7 +559,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         harmony.triadicRight,
     };
 
-    const int harmonyTop = harmonyTitleY + Scale(hwnd, 28);
+    const int harmonyTop = harmonyTitleY + Scale(hwnd, 22);
     for (std::size_t index = 0; index < state->harmonies.size(); ++index) {
         RECT rect{
             margin + static_cast<int>(index) * (smallSwatchWidth + swatchGap),
@@ -270,76 +575,142 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             font);
     }
 
-    const int contrastTitleY = harmonyTop + smallSwatchHeight + Scale(hwnd, 24);
-    RECT contrastTitle{
-        margin,
-        contrastTitleY,
-        Scale(hwnd, 740),
-        contrastTitleY + rowHeight};
-    DrawTextW(
-        hdc,
-        L"WCAG 대비",
-        -1,
-        &contrastTitle,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
+    const int contrastY = harmonyTop + smallSwatchHeight + Scale(hwnd, 14);
     const double whiteRatio =
         dkcolor::ContrastRatio(state->color, RGB(255, 255, 255));
     const double blackRatio =
         dkcolor::ContrastRatio(state->color, RGB(0, 0, 0));
 
-    wchar_t whiteText[160]{};
-    wchar_t blackText[160]{};
+    wchar_t contrastText[360]{};
     swprintf_s(
-        whiteText,
-        L"흰색 배경/글자 대비: %.2f:1 — %s",
+        contrastText,
+        L"WCAG 대비  흰색 %.2f:1 (%s)   |   검정 %.2f:1 (%s)",
         whiteRatio,
-        ContrastGrade(whiteRatio).c_str());
-    swprintf_s(
-        blackText,
-        L"검정 배경/글자 대비: %.2f:1 — %s",
+        ContrastGrade(whiteRatio).c_str(),
         blackRatio,
         ContrastGrade(blackRatio).c_str());
 
-    RECT whiteRect{
+    RECT contrastRect{
         margin,
-        contrastTitleY + Scale(hwnd, 26),
+        contrastY,
         Scale(hwnd, 740),
-        contrastTitleY + Scale(hwnd, 48)};
-    RECT blackRect{
-        margin,
-        contrastTitleY + Scale(hwnd, 50),
-        Scale(hwnd, 740),
-        contrastTitleY + Scale(hwnd, 72)};
+        contrastY + Scale(hwnd, 36)};
+    DrawTextW(
+        hdc,
+        contrastText,
+        -1,
+        &contrastRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
+    const int recentTitleY = contrastY + Scale(hwnd, 38);
+    RECT recentTitle{
+        margin,
+        recentTitleY,
+        Scale(hwnd, 740),
+        recentTitleY + rowHeight};
     DrawTextW(
         hdc,
-        whiteText,
+        L"최근 색상 — 최대 20개, 클릭하여 적용",
         -1,
-        &whiteRect,
+        &recentTitle,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    const int recentTop = recentTitleY + Scale(hwnd, 22);
+    DrawLibrarySwatches(
+        hwnd,
+        hdc,
+        font,
+        state->recentColors,
+        state->recentRects.data(),
+        state->recentRects.size(),
+        recentTop);
+
+    const int favoritesTitleY = recentTop + Scale(hwnd, 84) + Scale(hwnd, 12);
+    RECT favoritesTitle{
+        margin,
+        favoritesTitleY,
+        Scale(hwnd, 740),
+        favoritesTitleY + rowHeight};
     DrawTextW(
         hdc,
-        blackText,
+        L"즐겨찾기 — 최대 20개, 클릭하여 적용",
         -1,
-        &blackRect,
+        &favoritesTitle,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    const int favoritesTop = favoritesTitleY + Scale(hwnd, 22);
+    DrawLibrarySwatches(
+        hwnd,
+        hdc,
+        font,
+        state->favoriteColors,
+        state->favoriteRects.data(),
+        state->favoriteRects.size(),
+        favoritesTop);
+
+    RECT exportLabel{
+        margin + Scale(hwnd, 126),
+        Scale(hwnd, 655),
+        margin + Scale(hwnd, 246),
+        Scale(hwnd, 683)};
+    SetTextColor(hdc, GetSysColor(COLOR_WINDOWTEXT));
+    DrawTextW(
+        hdc,
+        L"즐겨찾기 내보내기:",
+        -1,
+        &exportLabel,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
     RECT helpRect{
         margin,
-        Scale(hwnd, 548),
+        Scale(hwnd, 692),
         Scale(hwnd, 740),
-        Scale(hwnd, 580)};
+        Scale(hwnd, 716)};
     SetTextColor(hdc, GetSysColor(COLOR_GRAYTEXT));
     DrawTextW(
         hdc,
-        L"직접 입력: #RGB, #RRGGBB, rgb(r,g,b), CSS 색상 이름. "
-        L"창을 닫아도 프로그램은 트레이에 계속 상주합니다.",
+        L"내보내기 대상은 즐겨찾기입니다. 창의 X 버튼은 트레이로 숨깁니다.",
         -1,
         &helpRect,
-        DT_LEFT | DT_WORDBREAK);
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
     SelectObject(hdc, oldFont);
+}
+
+void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
+    if (state == nullptr) {
+        return;
+    }
+
+    for (std::size_t index = 0;
+         index < state->recentColors.size() &&
+         index < state->recentRects.size();
+         ++index) {
+        if (PointInside(state->recentRects[index], point)) {
+            SetColorInternal(
+                hwnd,
+                state,
+                state->recentColors[index],
+                true,
+                true);
+            return;
+        }
+    }
+
+    for (std::size_t index = 0;
+         index < state->favoriteColors.size() &&
+         index < state->favoriteRects.size();
+         ++index) {
+        if (PointInside(state->favoriteRects[index], point)) {
+            SetColorInternal(
+                hwnd,
+                state,
+                state->favoriteColors[index],
+                true,
+                true);
+            return;
+        }
+    }
 }
 
 LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
@@ -368,10 +739,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             L"EDIT",
             L"",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-            0,
-            0,
-            0,
-            0,
+            0, 0, 0, 0,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(kInputId)),
             GetModuleHandleW(nullptr),
@@ -382,33 +750,83 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             L"BUTTON",
             L"적용",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-            0,
-            0,
-            0,
-            0,
+            0, 0, 0, 0,
             hwnd,
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(kApplyId)),
             GetModuleHandleW(nullptr),
             nullptr);
 
-        if (state->input != nullptr) {
-            SendMessageW(
-                state->input,
-                WM_SETFONT,
-                reinterpret_cast<WPARAM>(font),
-                TRUE);
-            SendMessageW(state->input, EM_SETLIMITTEXT, 128, 0);
+        state->favorite = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"즐겨찾기 추가",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            0, 0, 0, 0,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kFavoriteId)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        state->clearRecent = CreateWindowExW(
+            0,
+            L"BUTTON",
+            L"최근 목록 비우기",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            0, 0, 0, 0,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kClearRecentId)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        state->exportCss = CreateWindowExW(
+            0, L"BUTTON", L"CSS",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportCssId)),
+            GetModuleHandleW(nullptr), nullptr);
+
+        state->exportJson = CreateWindowExW(
+            0, L"BUTTON", L"JSON",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportJsonId)),
+            GetModuleHandleW(nullptr), nullptr);
+
+        state->exportTailwind = CreateWindowExW(
+            0, L"BUTTON", L"Tailwind",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportTailwindId)),
+            GetModuleHandleW(nullptr), nullptr);
+
+        state->exportGimp = CreateWindowExW(
+            0, L"BUTTON", L"GIMP GPL",
+            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+            0, 0, 0, 0, hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportGimpId)),
+            GetModuleHandleW(nullptr), nullptr);
+
+        const std::array<HWND, 8> controls{
+            state->input,
+            state->apply,
+            state->favorite,
+            state->clearRecent,
+            state->exportCss,
+            state->exportJson,
+            state->exportTailwind,
+            state->exportGimp};
+
+        for (HWND control : controls) {
+            SetControlFont(control, font);
         }
-        if (state->apply != nullptr) {
-            SendMessageW(
-                state->apply,
-                WM_SETFONT,
-                reinterpret_cast<WPARAM>(font),
-                TRUE);
+
+        if (state->input != nullptr) {
+            SendMessageW(state->input, EM_SETLIMITTEXT, 128, 0);
         }
 
         LayoutControls(hwnd, state);
         UpdateInput(state);
+        RefreshLibraryState(state);
         return 0;
     }
 
@@ -432,7 +850,16 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
     }
 
     case WM_COMMAND:
-        if (LOWORD(wParam) == kApplyId && state != nullptr && state->input != nullptr) {
+        if (state == nullptr) {
+            break;
+        }
+
+        switch (LOWORD(wParam)) {
+        case kApplyId: {
+            if (state->input == nullptr) {
+                return 0;
+            }
+
             const int length = GetWindowTextLengthW(state->input);
             std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
             GetWindowTextW(state->input, value.data(), length + 1);
@@ -449,8 +876,52 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 return 0;
             }
 
-            SetColorInternal(hwnd, state, parsed, true);
+            SetColorInternal(hwnd, state, parsed, true, true);
             return 0;
+        }
+
+        case kFavoriteId:
+            dkcolorlib::ToggleFavoriteColor(state->color);
+            RefreshLibraryState(state);
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+
+        case kClearRecentId:
+            dkcolorlib::ClearRecentColors();
+            RefreshLibraryState(state);
+            InvalidateRect(hwnd, nullptr, TRUE);
+            return 0;
+
+        case kExportCssId:
+            ExportFavorites(
+                hwnd,
+                state,
+                dkcolorlib::PaletteExportFormat::CssVariables);
+            return 0;
+
+        case kExportJsonId:
+            ExportFavorites(
+                hwnd,
+                state,
+                dkcolorlib::PaletteExportFormat::Json);
+            return 0;
+
+        case kExportTailwindId:
+            ExportFavorites(
+                hwnd,
+                state,
+                dkcolorlib::PaletteExportFormat::Tailwind);
+            return 0;
+
+        case kExportGimpId:
+            ExportFavorites(
+                hwnd,
+                state,
+                dkcolorlib::PaletteExportFormat::GimpGpl);
+            return 0;
+
+        default:
+            break;
         }
         break;
 
@@ -460,19 +931,31 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
             for (std::size_t index = 0; index < state->toneRects.size(); ++index) {
                 if (PointInside(state->toneRects[index], point)) {
-                    SetColorInternal(hwnd, state, state->tones[index], true);
+                    SetColorInternal(
+                        hwnd,
+                        state,
+                        state->tones[index],
+                        true,
+                        true);
                     return 0;
                 }
             }
 
             for (std::size_t index = 0; index < state->harmonyRects.size(); ++index) {
                 if (PointInside(state->harmonyRects[index], point)) {
-                    SetColorInternal(hwnd, state, state->harmonies[index], true);
+                    SetColorInternal(
+                        hwnd,
+                        state,
+                        state->harmonies[index],
+                        true,
+                        true);
                     return 0;
                 }
             }
+
+            HandleLibraryClick(hwnd, state, point);
         }
-        break;
+        return 0;
 
     case WM_PAINT: {
         PAINTSTRUCT paint{};
@@ -527,7 +1010,7 @@ HWND CreateUtilityWindow(
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         780,
-        620,
+        760,
         owner,
         nullptr,
         instance,
@@ -539,7 +1022,7 @@ HWND CreateUtilityWindow(
     }
 
     const int dpi = static_cast<int>(GetDpiForWindow(window));
-    RECT client{0, 0, MulDiv(760, dpi, 96), MulDiv(590, dpi, 96)};
+    RECT client{0, 0, MulDiv(760, dpi, 96), MulDiv(725, dpi, 96)};
     AdjustWindowRectExForDpi(
         &client,
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
@@ -564,7 +1047,10 @@ void ShowUtilityWindow(HWND hwnd, COLORREF color) {
         return;
     }
 
-    SetUtilityWindowColor(hwnd, color);
+    auto* state = reinterpret_cast<UtilityState*>(
+        GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    SetColorInternal(hwnd, state, color, false, false);
+
     ShowWindow(hwnd, SW_SHOWNORMAL);
     SetForegroundWindow(hwnd);
 }
@@ -576,7 +1062,7 @@ void SetUtilityWindowColor(HWND hwnd, COLORREF color) {
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    SetColorInternal(hwnd, state, color, false);
+    SetColorInternal(hwnd, state, color, false, false);
 }
 
 } // namespace dkcolorui
