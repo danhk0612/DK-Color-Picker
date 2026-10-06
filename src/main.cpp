@@ -1330,34 +1330,35 @@ void ShowTrayMenu(HWND hwnd) {
     HMENU averageMenu = CreatePopupMenu();
     HMENU hotkeyMenu = CreatePopupMenu();
     HMENU formatMenu = CreatePopupMenu();
+    HMENU themeMenu = CreatePopupMenu();
+    HMENU languageMenu = CreatePopupMenu();
 
     if (menu == nullptr ||
         zoomMenu == nullptr ||
         averageMenu == nullptr ||
         hotkeyMenu == nullptr ||
-        formatMenu == nullptr) {
+        formatMenu == nullptr ||
+        themeMenu == nullptr ||
+        languageMenu == nullptr) {
         if (menu != nullptr) {
             DestroyMenu(menu);
-        }
-        if (zoomMenu != nullptr) {
-            DestroyMenu(zoomMenu);
-        }
-        if (averageMenu != nullptr) {
-            DestroyMenu(averageMenu);
-        }
-        if (hotkeyMenu != nullptr) {
-            DestroyMenu(hotkeyMenu);
-        }
-        if (formatMenu != nullptr) {
-            DestroyMenu(formatMenu);
+        } else {
+            if (zoomMenu != nullptr) DestroyMenu(zoomMenu);
+            if (averageMenu != nullptr) DestroyMenu(averageMenu);
+            if (hotkeyMenu != nullptr) DestroyMenu(hotkeyMenu);
+            if (formatMenu != nullptr) DestroyMenu(formatMenu);
+            if (themeMenu != nullptr) DestroyMenu(themeMenu);
+            if (languageMenu != nullptr) DestroyMenu(languageMenu);
         }
         return;
     }
 
-    std::wstring pickLabel = L"색 추출\t";
+    std::wstring pickLabel = dkl10n::Text(L"tray.pick") + L"\t";
     pickLabel += CurrentHotkey().label;
     AppendMenuW(menu, MF_STRING, kMenuPick, pickLabel.c_str());
-    AppendMenuW(menu, MF_STRING, kMenuOpenTools, L"색상 도구 열기");
+
+    const std::wstring toolsLabel = dkl10n::Text(L"tray.tools");
+    AppendMenuW(menu, MF_STRING, kMenuOpenTools, toolsLabel.c_str());
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
 
     for (std::size_t i = 0; i < kZoomLevels.size(); ++i) {
@@ -1371,7 +1372,8 @@ void ShowTrayMenu(HWND hwnd) {
 
     for (std::size_t i = 0; i < kAverageSizes.size(); ++i) {
         const std::wstring label =
-            std::to_wstring(kAverageSizes[i]) + L"x" + std::to_wstring(kAverageSizes[i]);
+            std::to_wstring(kAverageSizes[i]) + L"x" +
+            std::to_wstring(kAverageSizes[i]);
         AppendCheckedMenuItem(
             averageMenu,
             kMenuAverageBase + static_cast<UINT>(i),
@@ -1390,50 +1392,88 @@ void ShowTrayMenu(HWND hwnd) {
     const UINT formatCount = static_cast<UINT>(dkcolor::CopyFormat::Count);
     for (UINT i = 0; i < formatCount; ++i) {
         const auto format = static_cast<dkcolor::CopyFormat>(i);
+        const std::wstring label = CopyFormatDisplayName(format);
         AppendCheckedMenuItem(
             formatMenu,
             kMenuFormatBase + i,
-            dkcolor::CopyFormatLabel(format),
+            label.c_str(),
             g_settings.copyFormat == static_cast<int>(i));
     }
     AppendMenuW(formatMenu, MF_SEPARATOR, 0, nullptr);
+    const std::wstring templateLabel = dkl10n::Text(L"tray.template_edit");
     AppendMenuW(
         formatMenu,
         MF_STRING,
         kMenuEditTemplate,
-        L"사용자 템플릿 편집...");
+        templateLabel.c_str());
+
+    const std::array<std::wstring, 3> themeLabels{
+        dkl10n::Text(L"theme.system"),
+        dkl10n::Text(L"theme.light"),
+        dkl10n::Text(L"theme.dark")};
+    for (UINT i = 0; i < themeLabels.size(); ++i) {
+        AppendCheckedMenuItem(
+            themeMenu,
+            kMenuThemeBase + i,
+            themeLabels[i].c_str(),
+            g_settings.themeMode == static_cast<int>(i));
+    }
+
+    const std::array<std::wstring, 2> languageLabels{
+        dkl10n::Text(L"language.ko"),
+        dkl10n::Text(L"language.en")};
+    for (UINT i = 0; i < languageLabels.size(); ++i) {
+        AppendCheckedMenuItem(
+            languageMenu,
+            kMenuLanguageBase + i,
+            languageLabels[i].c_str(),
+            g_settings.language == static_cast<int>(i));
+    }
+
+    const std::wstring zoomLabel = dkl10n::Text(L"tray.zoom");
+    const std::wstring averageLabel = dkl10n::Text(L"tray.average");
+    const std::wstring copyLabel = dkl10n::Text(L"tray.copy_format");
+    const std::wstring hotkeyLabel = dkl10n::Text(L"tray.hotkey");
+    const std::wstring themeLabel = dkl10n::Text(L"tray.theme");
+    const std::wstring languageLabel = dkl10n::Text(L"tray.language");
 
     AppendMenuW(
-        menu,
-        MF_POPUP,
-        reinterpret_cast<UINT_PTR>(zoomMenu),
-        L"확대 배율");
+        menu, MF_POPUP, reinterpret_cast<UINT_PTR>(zoomMenu), zoomLabel.c_str());
     AppendMenuW(
-        menu,
-        MF_POPUP,
-        reinterpret_cast<UINT_PTR>(averageMenu),
-        L"평균 추출");
+        menu, MF_POPUP, reinterpret_cast<UINT_PTR>(averageMenu), averageLabel.c_str());
     AppendMenuW(
-        menu,
-        MF_POPUP,
-        reinterpret_cast<UINT_PTR>(formatMenu),
-        L"복사 형식");
+        menu, MF_POPUP, reinterpret_cast<UINT_PTR>(formatMenu), copyLabel.c_str());
     AppendMenuW(
-        menu,
-        MF_POPUP,
-        reinterpret_cast<UINT_PTR>(hotkeyMenu),
-        L"전역 단축키");
+        menu, MF_POPUP, reinterpret_cast<UINT_PTR>(hotkeyMenu), hotkeyLabel.c_str());
 
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
+
+    const std::wstring alwaysOpenLabel = dkl10n::Text(L"tray.always_open");
+    AppendMenuW(
+        menu,
+        MF_STRING | (g_settings.alwaysOpenTools ? MF_CHECKED : 0),
+        kMenuAlwaysOpenTools,
+        alwaysOpenLabel.c_str());
 
     UINT autoStartFlags = MF_STRING;
     if (IsAutoStartEnabled()) {
         autoStartFlags |= MF_CHECKED;
     }
-    AppendMenuW(menu, autoStartFlags, kMenuAutoStart, L"Windows 시작 시 자동 실행");
+    const std::wstring autoStartLabel = dkl10n::Text(L"tray.auto_start");
+    AppendMenuW(
+        menu,
+        autoStartFlags,
+        kMenuAutoStart,
+        autoStartLabel.c_str());
+
+    AppendMenuW(
+        menu, MF_POPUP, reinterpret_cast<UINT_PTR>(themeMenu), themeLabel.c_str());
+    AppendMenuW(
+        menu, MF_POPUP, reinterpret_cast<UINT_PTR>(languageMenu), languageLabel.c_str());
 
     AppendMenuW(menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu, MF_STRING, kMenuExit, L"종료");
+    const std::wstring exitLabel = dkl10n::Text(L"tray.exit");
+    AppendMenuW(menu, MF_STRING, kMenuExit, exitLabel.c_str());
 
     POINT point{};
     GetCursorPos(&point);
@@ -1467,10 +1507,13 @@ void ShowTrayMenu(HWND hwnd) {
 
     if (selected >= kMenuHotkeyBase &&
         selected < kMenuHotkeyBase + kHotkeyPresets.size()) {
-        if (!ChangeHotkeyPreset(hwnd, static_cast<int>(selected - kMenuHotkeyBase))) {
+        if (!ChangeHotkeyPreset(
+                hwnd,
+                static_cast<int>(selected - kMenuHotkeyBase))) {
+            const std::wstring message = dkl10n::Text(L"dialog.hotkey_failed");
             MessageBoxW(
                 hwnd,
-                L"선택한 전역 단축키를 등록하지 못했습니다.\n다른 프로그램에서 이미 사용 중일 수 있습니다.",
+                message.c_str(),
                 kAppName,
                 MB_OK | MB_ICONWARNING);
         }
@@ -1479,8 +1522,44 @@ void ShowTrayMenu(HWND hwnd) {
 
     if (selected >= kMenuFormatBase &&
         selected < kMenuFormatBase + formatCount) {
-        g_settings.copyFormat = static_cast<int>(selected - kMenuFormatBase);
+        g_settings.copyFormat =
+            static_cast<int>(selected - kMenuFormatBase);
         SaveSettings();
+
+        if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
+            dkcolorui::SetUtilityCopyFormat(
+                g_utilityWindow,
+                CurrentCopyFormat());
+        }
+        return;
+    }
+
+    if (selected >= kMenuThemeBase &&
+        selected < kMenuThemeBase + 3) {
+        g_settings.themeMode =
+            static_cast<int>(selected - kMenuThemeBase);
+        SaveSettings();
+
+        if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
+            dkcolorui::RefreshUtilityWindow(
+                g_utilityWindow,
+                CurrentThemeMode());
+        }
+        return;
+    }
+
+    if (selected >= kMenuLanguageBase &&
+        selected < kMenuLanguageBase + 2) {
+        g_settings.language =
+            static_cast<int>(selected - kMenuLanguageBase);
+        dkl10n::SetLanguage(CurrentLanguage());
+        SaveSettings();
+
+        if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
+            dkcolorui::RefreshUtilityWindow(
+                g_utilityWindow,
+                CurrentThemeMode());
+        }
         return;
     }
 
@@ -1493,6 +1572,11 @@ void ShowTrayMenu(HWND hwnd) {
         OpenUtilityWindow();
         break;
 
+    case kMenuAlwaysOpenTools:
+        g_settings.alwaysOpenTools = !g_settings.alwaysOpenTools;
+        SaveSettings();
+        break;
+
     case kMenuEditTemplate:
         ShowTemplateEditor(hwnd);
         break;
@@ -1500,9 +1584,11 @@ void ShowTrayMenu(HWND hwnd) {
     case kMenuAutoStart: {
         const bool enable = !IsAutoStartEnabled();
         if (!SetAutoStart(enable)) {
+            const std::wstring message =
+                dkl10n::Text(L"dialog.autostart_failed");
             MessageBoxW(
                 hwnd,
-                L"자동 시작 설정을 변경하지 못했습니다.",
+                message.c_str(),
                 kAppName,
                 MB_OK | MB_ICONERROR);
         }
