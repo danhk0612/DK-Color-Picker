@@ -10,6 +10,7 @@
 #include <cstring>
 #include <cwchar>
 #include <string>
+#include <utility>
 
 namespace {
 
