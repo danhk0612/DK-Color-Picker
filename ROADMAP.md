@@ -83,9 +83,22 @@ Status: implemented on task/t05-library-export
 
 ## T06 - Product polish
 
-- Dark / light / system theme
+Status: implemented on task/t06-product-polish
+
+- System / light / dark theme modes
 - Korean / English first-party localization
-- External localization files
-- Custom application icon
-- Release packaging
-- Startup and memory measurements
+- Optional external localization INI overrides
+- Custom application / window / tray icon
+- Tagged GitHub release packaging workflow
+- Reproducible PowerShell release-package script
+- Local startup / Working Set / private-memory measurement script
+- Tray option: always open Color Tools after picking
+- Copy-format selector directly in Color Tools
+- Bidirectional copy-format synchronization between tray and Color Tools
+
+## Follow-up polish
+
+- Visual QA of light/dark controls on real Windows 10/11 desktops
+- Tune layout if translated strings are expanded substantially by external locales
+- Record representative startup/memory figures on release hardware
+- Add automated non-GUI tests for color conversion, parsing and export modules
