@@ -1,8 +1,10 @@
 #include <windows.h>
+#include <windowsx.h>
 #include <shellapi.h>
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <cwchar>
 #include <string>
 
@@ -45,13 +47,13 @@ POINT g_cursorPoint{0, 0};
 bool g_hasCursorPoint = false;
 
 void ReleaseDesktopCapture() {
+    if (g_capture.dc != nullptr && g_capture.oldBitmap != nullptr) {
+        SelectObject(g_capture.dc, g_capture.oldBitmap);
+    }
+    if (g_capture.bitmap != nullptr) {
+        DeleteObject(g_capture.bitmap);
+    }
     if (g_capture.dc != nullptr) {
-        if (g_capture.oldBitmap != nullptr) {
-            SelectObject(g_capture.dc, g_capture.oldBitmap);
-        }
-        if (g_capture.bitmap != nullptr) {
-            DeleteObject(g_capture.bitmap);
-        }
         DeleteDC(g_capture.dc);
     }
     g_capture = {};
@@ -497,6 +499,7 @@ void ShowTrayMenu(HWND hwnd) {
         nullptr);
 
     DestroyMenu(menu);
+    PostMessageW(hwnd, WM_NULL, 0, 0);
 
     switch (selected) {
     case kMenuPick:
@@ -613,15 +616,15 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int) {
     }
 
     g_messageWindow = CreateWindowExW(
-        0,
+        WS_EX_TOOLWINDOW,
         kMessageClass,
         kAppName,
+        WS_OVERLAPPED,
         0,
         0,
         0,
         0,
-        0,
-        HWND_MESSAGE,
+        nullptr,
         nullptr,
         instance,
         nullptr);
