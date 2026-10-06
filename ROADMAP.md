@@ -48,12 +48,20 @@ Status: implemented on task/t03-color-formats
 
 ## T04 - Main utility UI
 
-- Current color card
-- Direct color entry
-- Nearest CSS named color
-- Tone steps
-- Harmony suggestions
-- WCAG contrast checks
+Status: implemented on task/t04-main-ui
+
+- Native Win32 color utility window opened from tray
+- Current color card with HEX / RGB / HSL / OKLCH
+- Direct input: #RGB, #RRGGBB, rgb(r,g,b), CSS named colors
+- Nearest CSS named color across all 148 names using CIELAB distance
+- Five tone steps using white/black mixing
+- Complementary, analogous and triadic harmony suggestions
+- Clickable tone and harmony swatches
+- WCAG contrast ratios against white and black
+- AA / AAA normal and large-text threshold labels
+- Picker selections update the utility window when it is open
+- Closing the utility window hides it while the tray process remains resident
+- Tray double-click opens the utility window
 
 ## T05 - Library and export
 
