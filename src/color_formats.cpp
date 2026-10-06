@@ -280,6 +280,13 @@ ColorValues ConvertColor(COLORREF color) {
     values.labA = 500.0 * (fx - fy);
     values.labB = 200.0 * (fy - fz);
 
+    if (std::abs(values.labA) < 0.0005) {
+        values.labA = 0.0;
+    }
+    if (std::abs(values.labB) < 0.0005) {
+        values.labB = 0.0;
+    }
+
     const double l =
         0.4122214708 * linearR +
         0.5363325363 * linearG +
@@ -312,12 +319,15 @@ ColorValues ConvertColor(COLORREF color) {
 
     values.oklchL = Clamp01(okL);
     values.oklchC = std::sqrt(okA * okA + okB * okB);
-    values.oklchH = std::atan2(okB, okA) * 180.0 / kPi;
-    if (values.oklchH < 0.0) {
-        values.oklchH += 360.0;
-    }
-    if (values.oklchC <= 1e-12) {
+
+    if (values.oklchC < 1e-7) {
+        values.oklchC = 0.0;
         values.oklchH = 0.0;
+    } else {
+        values.oklchH = std::atan2(okB, okA) * 180.0 / kPi;
+        if (values.oklchH < 0.0) {
+            values.oklchH += 360.0;
+        }
     }
 
     return values;
