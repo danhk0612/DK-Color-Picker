@@ -1151,15 +1151,18 @@ LRESULT CALLBACK TemplateEditorProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             g_instance,
             nullptr);
 
+        const std::wstring helpText =
+            std::wstring(L"{hex} {rgb} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}\r\n") +
+            dkl10n::Text(L"template.components") +
+            L": {r} {g} {b}, {hsl_h} {hsl_s} {hsl_l}, "
+            L"{hsv_h} {hsv_s} {hsv_v}, {hwb_h} {hwb_w} {hwb_b},\r\n"
+            L"{cmyk_c} {cmyk_m} {cmyk_y} {cmyk_k}, "
+            L"{lab_l} {lab_a} {lab_b}, {oklch_l} {oklch_c} {oklch_h}";
+
         HWND help = CreateWindowExW(
             0,
             L"STATIC",
-            L"{hex} {rgb} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}\r\n"
-            (dkl10n::Text(L"template.components") +
-             L": {r} {g} {b}, {hsl_h} {hsl_s} {hsl_l}, "
-             L"{hsv_h} {hsv_s} {hsv_v}, {hwb_h} {hwb_w} {hwb_b},\r\n"
-             L"{cmyk_c} {cmyk_m} {cmyk_y} {cmyk_k}, "
-             L"{lab_l} {lab_a} {lab_b}, {oklch_l} {oklch_c} {oklch_h}").c_str(),
+            helpText.c_str(),
             WS_CHILD | WS_VISIBLE,
             16,
             76,
