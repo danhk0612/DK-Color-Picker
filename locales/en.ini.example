@@ -1,0 +1,5 @@
+[Strings]
+tray.pick=Pick color
+tray.tools=Open color tools
+tray.always_open=Always open color tools after picking
+tools.title=DK Color Picker - Color Tools
