@@ -1527,7 +1527,7 @@ void ShowTrayMenu(HWND hwnd) {
             const std::wstring message = dkl10n::Text(L"dialog.hotkey_failed");
             MessageBoxW(
                 hwnd,
-                message.c_str(),
+                dialogText.c_str(),
                 kAppName,
                 MB_OK | MB_ICONWARNING);
         }
@@ -1629,18 +1629,18 @@ LRESULT CALLBACK MessageProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 g_settings.hotkeyPreset = 0;
                 if (RegisterCurrentHotkey(hwnd)) {
                     SaveSettings();
-                    const std::wstring message =
+                    const std::wstring dialogText =
                         dkl10n::Text(L"dialog.hotkey_fallback");
                     MessageBoxW(
                         hwnd,
-                        message.c_str(),
+                        dialogText.c_str(),
                         kAppName,
                         MB_OK | MB_ICONWARNING);
                     return 0;
                 }
             }
 
-            const std::wstring message =
+            const std::wstring dialogText =
                 dkl10n::Text(L"dialog.hotkey_unavailable");
             MessageBoxW(
                 hwnd,
