@@ -21,6 +21,10 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
+      - name: Measure startup and memory
+        shell: pwsh
+        run: ./tools/measure.ps1 -ExePath build/Release/DKColorPicker.exe -Samples 3
+
       - name: Package
         shell: pwsh
         run: ./tools/package.ps1 -ExePath build/Release/DKColorPicker.exe
