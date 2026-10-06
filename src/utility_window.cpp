@@ -1,5 +1,7 @@
 #include "utility_window.h"
 
+#include <windowsx.h>
+
 #include "color_formats.h"
 #include "color_tools.h"
 
