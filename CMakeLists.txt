@@ -6,6 +6,10 @@ add_executable(DKColorPicker WIN32
     src/main.cpp
     src/color_formats.cpp
     src/color_formats.h
+    src/color_tools.cpp
+    src/color_tools.h
+    src/utility_window.cpp
+    src/utility_window.h
 )
 
 target_compile_features(DKColorPicker PRIVATE cxx_std_20)
