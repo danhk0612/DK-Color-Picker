@@ -21,9 +21,15 @@ jobs:
       - name: Build
         run: cmake --build build --config Release
 
-      - name: Upload executable
+      - name: Package
+        shell: pwsh
+        run: ./tools/package.ps1 -ExePath build/Release/DKColorPicker.exe
+
+      - name: Upload executable and package
         uses: actions/upload-artifact@v4
         with:
           name: DKColorPicker-win-x64
-          path: build/Release/DKColorPicker.exe
+          path: |
+            build/Release/DKColorPicker.exe
+            dist/DKColorPicker-win-x64.zip
           if-no-files-found: error
