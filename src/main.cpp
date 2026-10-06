@@ -3,6 +3,7 @@
 #include <shellapi.h>
 
 #include "color_formats.h"
+#include "color_library.h"
 #include "utility_window.h"
 
 #include <algorithm>
@@ -673,6 +674,7 @@ dkcolor::CopyFormat CurrentCopyFormat() {
 void FinishPicking(HWND hwnd, int x, int y) {
     const COLORREF color = SampleColorAt(x, y);
     g_currentColor = color;
+    dkcolorlib::AddRecentColor(color);
 
     if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
         dkcolorui::SetUtilityWindowColor(g_utilityWindow, color);
