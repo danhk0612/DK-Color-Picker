@@ -1524,7 +1524,7 @@ void ShowTrayMenu(HWND hwnd) {
         if (!ChangeHotkeyPreset(
                 hwnd,
                 static_cast<int>(selected - kMenuHotkeyBase))) {
-            const std::wstring message = dkl10n::Text(L"dialog.hotkey_failed");
+            const std::wstring dialogText = dkl10n::Text(L"dialog.hotkey_failed");
             MessageBoxW(
                 hwnd,
                 dialogText.c_str(),
@@ -1644,7 +1644,7 @@ LRESULT CALLBACK MessageProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 dkl10n::Text(L"dialog.hotkey_unavailable");
             MessageBoxW(
                 hwnd,
-                message.c_str(),
+                dialogText.c_str(),
                 kAppName,
                 MB_OK | MB_ICONWARNING);
         }
