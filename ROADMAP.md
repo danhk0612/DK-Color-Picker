@@ -65,12 +65,21 @@ Status: implemented on task/t04-main-ui
 
 ## T05 - Library and export
 
-- Recent history
-- Favorites
-- CSS variables
-- JSON
-- Tailwind color object
-- GIMP GPL palette
+Status: implemented on task/t05-library-export
+
+- Persistent recent-color library, maximum 20 unique colors
+- Duplicate recent colors move to the front
+- Persistent favorites, maximum 20 unique colors
+- Current-color favorite toggle
+- Clickable recent and favorite swatches in the utility window
+- Clear-recent action
+- Lightweight LocalAppData INI persistence without a database
+- Export favorites through native Windows Save As dialog
+- CSS custom properties export
+- JSON object export
+- Tailwind colors-object export
+- GIMP GPL palette export
+- UTF-8 file output
 
 ## T06 - Product polish
 
