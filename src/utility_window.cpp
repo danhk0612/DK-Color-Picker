@@ -481,7 +481,20 @@ bool HandleColorClick(
     FlashRect(hwnd, state, rect);
 
     if (PointInside(StarRect(hwnd, rect), point)) {
-        dkcolorlib::ToggleFavoriteColor(color);
+        const dkcolorlib::FavoriteToggleResult result =
+            dkcolorlib::ToggleFavoriteColor(color);
+
+        if (result == dkcolorlib::FavoriteToggleResult::LimitReached) {
+            const std::wstring message =
+                dkl10n::Text(L"dialog.favorite_limit");
+            MessageBoxW(
+                hwnd,
+                message.c_str(),
+                L"DK Color Picker",
+                MB_OK | MB_ICONWARNING);
+            return true;
+        }
+
         RefreshLibraryState(state);
         ResizeUtilityToContent(hwnd, state);
         InvalidateRect(hwnd, nullptr, TRUE);
