@@ -14,10 +14,19 @@ struct CssNamedColor {
 
 struct HarmonySet {
     COLORREF complementary = RGB(0, 0, 0);
-    COLORREF analogousLeft = RGB(0, 0, 0);
-    COLORREF analogousRight = RGB(0, 0, 0);
-    COLORREF triadicLeft = RGB(0, 0, 0);
-    COLORREF triadicRight = RGB(0, 0, 0);
+    std::array<COLORREF, 2> analogous{
+        RGB(0, 0, 0),
+        RGB(0, 0, 0)};
+    std::array<COLORREF, 2> triadic{
+        RGB(0, 0, 0),
+        RGB(0, 0, 0)};
+    std::array<COLORREF, 2> splitComplementary{
+        RGB(0, 0, 0),
+        RGB(0, 0, 0)};
+    std::array<COLORREF, 3> square{
+        RGB(0, 0, 0),
+        RGB(0, 0, 0),
+        RGB(0, 0, 0)};
 };
 
 bool ParseColorText(const std::wstring& text, COLORREF* color);
