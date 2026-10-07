@@ -23,65 +23,6 @@ constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
 
 struct UtilityState {
     std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)> formatRadios{};
-    HWND clearRecent = nullptr;
-
-    COLORREF color = RGB(59, 130, 246);
-    dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
-    std::wstring customTemplate = dkcolor::DefaultCustomTemplate();
-    dktheme::ThemeMode theme = dktheme::ThemeMode::System;
-    CopyColorCallback onCopyColor = nullptr;
-    CopyTextCallback onCopyText = nullptr;
-    CopyFormatChangedCallback onCopyFormatChanged = nullptr;
-
-    HBRUSH backgroundBrush = nullptr;
-    HBRUSH controlBrush = nullptr;
-
-    RECT currentRect{};
-    RECT cssNameRect{};
-    std::array<RECT, 5> toneRects{};
-    std::array<RECT, 5> harmonyRects{};
-    std::array<COLORREF, 5> tones{};
-    std::array<COLORREF, 5> harmonies{};
-
-    std::array<RECT, dkcolorlib::kMaxRecentColors> recentRects{};
-    std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
-    std::vector<COLORREF> recentColors;
-    std::vector<COLORREF> favoriteColors;
-
-    RECT feedbackRect{};
-    bool feedbackActive = false;
-};
-    HWND clearRecent = nullptr;
-    HWND exportCss = nullptr;
-    HWND exportJson = nullptr;
-    HWND exportTailwind = nullptr;
-    HWND exportGimp = nullptr;
-
-    COLORREF color = RGB(59, 130, 246);
-    dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
-    std::wstring customTemplate = dkcolor::DefaultCustomTemplate();
-    dktheme::ThemeMode theme = dktheme::ThemeMode::System;
-    ColorChangedCallback onColorChanged = nullptr;
-    CopyColorCallback onCopyColor = nullptr;
-    CopyFormatChangedCallback onCopyFormatChanged = nullptr;
-
-    HBRUSH backgroundBrush = nullptr;
-    HBRUSH controlBrush = nullptr;
-
-    std::array<RECT, 5> toneRects{};
-    std::array<RECT, 5> harmonyRects{};
-    std::array<COLORREF, 5> tones{};
-    std::array<COLORREF, 5> harmonies{};
-
-    std::array<RECT, dkcolorlib::kMaxRecentColors> recentRects{};
-    std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
-    std::vector<COLORREF> recentColors;
-    std::vector<COLORREF> favoriteColors;
-
-    RECT feedbackRect{};
-    bool feedbackActive = false;
-};
-
 int Scale(HWND hwnd, int value) {
     return MulDiv(value, static_cast<int>(GetDpiForWindow(hwnd)), 96);
 }
@@ -180,7 +121,7 @@ void RefreshFormatRadios(UtilityState* state) {
     }
 
     CheckRadioButton(
-        GetParent(state->formatLabel),
+        GetParent(state->clearRecent),
         kFormatRadioBaseId,
         kFormatRadioBaseId +
             static_cast<int>(dkcolor::CopyFormat::Count) - 1,
@@ -254,14 +195,6 @@ void RefreshLibraryState(UtilityState* state) {
 
     state->recentColors = dkcolorlib::LoadRecentColors();
     state->favoriteColors = dkcolorlib::LoadFavoriteColors();
-
-    if (state->favorite != nullptr) {
-        const std::wstring text = dkl10n::Text(
-            dkcolorlib::IsFavoriteColor(state->color)
-                ? L"tools.favorite_remove"
-                : L"tools.favorite_add");
-        SetWindowTextW(state->favorite, text.c_str());
-    }
 }
 
 void SetColorInternal(
