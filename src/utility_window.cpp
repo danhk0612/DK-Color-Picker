@@ -1,8 +1,6 @@
 #include "utility_window.h"
 
 #include <windowsx.h>
-#include <commdlg.h>
-
 #include "color_formats.h"
 #include "color_library.h"
 #include "color_tools.h"
@@ -19,26 +17,40 @@ namespace dkcolorui {
 namespace {
 
 constexpr wchar_t kUtilityClass[] = L"DKColorPicker.UtilityWindow";
-constexpr int kInputLabelId = 3000;
-constexpr int kInputId = 3001;
-constexpr int kApplyId = 3002;
-constexpr int kFavoriteId = 3003;
 constexpr int kClearRecentId = 3004;
-constexpr int kFormatLabelId = 3005;
 constexpr int kFormatRadioBaseId = 3020;
-constexpr int kExportCssId = 3010;
-constexpr int kExportJsonId = 3011;
-constexpr int kExportTailwindId = 3012;
-constexpr int kExportGimpId = 3013;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
 
 struct UtilityState {
-    HWND inputLabel = nullptr;
-    HWND input = nullptr;
-    HWND apply = nullptr;
-    HWND favorite = nullptr;
-    HWND formatLabel = nullptr;
     std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)> formatRadios{};
+    HWND clearRecent = nullptr;
+
+    COLORREF color = RGB(59, 130, 246);
+    dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
+    std::wstring customTemplate = dkcolor::DefaultCustomTemplate();
+    dktheme::ThemeMode theme = dktheme::ThemeMode::System;
+    CopyColorCallback onCopyColor = nullptr;
+    CopyTextCallback onCopyText = nullptr;
+    CopyFormatChangedCallback onCopyFormatChanged = nullptr;
+
+    HBRUSH backgroundBrush = nullptr;
+    HBRUSH controlBrush = nullptr;
+
+    RECT currentRect{};
+    RECT cssNameRect{};
+    std::array<RECT, 5> toneRects{};
+    std::array<RECT, 5> harmonyRects{};
+    std::array<COLORREF, 5> tones{};
+    std::array<COLORREF, 5> harmonies{};
+
+    std::array<RECT, dkcolorlib::kMaxRecentColors> recentRects{};
+    std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
+    std::vector<COLORREF> recentColors;
+    std::vector<COLORREF> favoriteColors;
+
+    RECT feedbackRect{};
+    bool feedbackActive = false;
+};
     HWND clearRecent = nullptr;
     HWND exportCss = nullptr;
     HWND exportJson = nullptr;
@@ -181,18 +193,10 @@ void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
     }
 
     const std::wstring title = dkl10n::Text(L"tools.title");
-    SetWindowTextW(hwnd, title.c_str());
-
-    const std::wstring inputLabel = dkl10n::Text(L"tools.direct_input");
-    const std::wstring apply = dkl10n::Text(L"tools.apply");
-    const std::wstring format = dkl10n::Text(L"tools.copy_format");
     const std::wstring clear = dkl10n::Text(L"tools.clear_recent");
 
-    SetWindowTextW(state->inputLabel, inputLabel.c_str());
-    SetWindowTextW(state->apply, apply.c_str());
-    SetWindowTextW(state->formatLabel, format.c_str());
+    SetWindowTextW(hwnd, title.c_str());
     SetWindowTextW(state->clearRecent, clear.c_str());
-
     RefreshFormatRadios(state);
 }
 
@@ -203,22 +207,7 @@ void ApplyTheme(HWND hwnd, UtilityState* state) {
 
     RecreateThemeBrushes(state);
     dktheme::ApplyWindow(hwnd, state->theme);
-
-    const std::array<HWND, 10> controls{
-        state->inputLabel,
-        state->input,
-        state->apply,
-        state->favorite,
-        state->formatLabel,
-        state->clearRecent,
-        state->exportCss,
-        state->exportJson,
-        state->exportTailwind,
-        state->exportGimp};
-
-    for (HWND control : controls) {
-        dktheme::ApplyControl(control, state->theme);
-    }
+    dktheme::ApplyControl(state->clearRecent, state->theme);
 
     for (HWND radio : state->formatRadios) {
         dktheme::ApplyControl(radio, state->theme);
@@ -231,55 +220,12 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
     }
 
     const int margin = Scale(hwnd, 20);
-    const int top = Scale(hwnd, 16);
-    const int inputLabelWidth = Scale(hwnd, 92);
-    const int inputWidth = Scale(hwnd, 236);
-    const int inputHeight = Scale(hwnd, 28);
-    const int applyWidth = Scale(hwnd, 92);
-    const int favoriteWidth = Scale(hwnd, 132);
-    const int gap = Scale(hwnd, 8);
-
-    MoveWindow(
-        state->inputLabel,
-        margin,
-        top + Scale(hwnd, 4),
-        inputLabelWidth,
-        Scale(hwnd, 24),
-        TRUE);
-    MoveWindow(
-        state->input,
-        margin + inputLabelWidth + gap,
-        top,
-        inputWidth,
-        inputHeight,
-        TRUE);
-    MoveWindow(
-        state->apply,
-        margin + inputLabelWidth + gap + inputWidth + gap,
-        top,
-        applyWidth,
-        inputHeight,
-        TRUE);
-    MoveWindow(
-        state->favorite,
-        margin + inputLabelWidth + gap + inputWidth + gap + applyWidth + gap,
-        top,
-        favoriteWidth,
-        inputHeight,
-        TRUE);
-
-    const int formatY = Scale(hwnd, 52);
-    MoveWindow(
-        state->formatLabel,
-        margin,
-        formatY + Scale(hwnd, 3),
-        Scale(hwnd, 76),
-        Scale(hwnd, 24),
-        TRUE);
+    const int formatY = Scale(hwnd, 14);
 
     const std::array<int, static_cast<std::size_t>(dkcolor::CopyFormat::Count)> formatWidths{
         54, 54, 54, 54, 58, 62, 68, 68, 108};
-    int formatX = margin + Scale(hwnd, 80);
+
+    int formatX = margin;
     for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
         const int width = Scale(hwnd, formatWidths[index]);
         MoveWindow(
@@ -292,41 +238,11 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
         formatX += width + Scale(hwnd, 4);
     }
 
-    const int actionY = Scale(hwnd, 700);
     MoveWindow(
         state->clearRecent,
         margin,
-        actionY,
+        Scale(hwnd, 620),
         Scale(hwnd, 120),
-        Scale(hwnd, 28),
-        TRUE);
-
-    MoveWindow(
-        state->exportCss,
-        margin + Scale(hwnd, 248),
-        actionY,
-        Scale(hwnd, 100),
-        Scale(hwnd, 28),
-        TRUE);
-    MoveWindow(
-        state->exportJson,
-        margin + Scale(hwnd, 354),
-        actionY,
-        Scale(hwnd, 84),
-        Scale(hwnd, 28),
-        TRUE);
-    MoveWindow(
-        state->exportTailwind,
-        margin + Scale(hwnd, 444),
-        actionY,
-        Scale(hwnd, 110),
-        Scale(hwnd, 28),
-        TRUE);
-    MoveWindow(
-        state->exportGimp,
-        margin + Scale(hwnd, 560),
-        actionY,
-        Scale(hwnd, 118),
         Scale(hwnd, 28),
         TRUE);
 }
@@ -348,35 +264,17 @@ void RefreshLibraryState(UtilityState* state) {
     }
 }
 
-void UpdateInput(UtilityState* state) {
-    if (state != nullptr && state->input != nullptr) {
-        const std::wstring text = Hex(state->color);
-        SetWindowTextW(state->input, text.c_str());
-    }
-}
-
 void SetColorInternal(
     HWND hwnd,
     UtilityState* state,
-    COLORREF color,
-    bool notify,
-    bool addRecent) {
+    COLORREF color) {
     if (state == nullptr) {
         return;
     }
 
     state->color = color;
-    if (addRecent) {
-        dkcolorlib::AddRecentColor(color);
-    }
-
-    UpdateInput(state);
     RefreshLibraryState(state);
     InvalidateRect(hwnd, nullptr, TRUE);
-
-    if (notify && state->onColorChanged != nullptr) {
-        state->onColorChanged(color);
-    }
 }
 
 bool PointInside(const RECT& rect, POINT point) {
@@ -508,165 +406,6 @@ void DrawLibrarySwatches(
             font,
             true);
     }
-}
-
-bool WriteUtf8File(
-    const std::wstring& path,
-    const std::wstring& text) {
-    const int bytesRequired = WideCharToMultiByte(
-        CP_UTF8,
-        0,
-        text.c_str(),
-        static_cast<int>(text.size()),
-        nullptr,
-        0,
-        nullptr,
-        nullptr);
-
-    if (bytesRequired < 0) {
-        return false;
-    }
-
-    std::string utf8(static_cast<std::size_t>(bytesRequired), '\0');
-    if (bytesRequired > 0) {
-        WideCharToMultiByte(
-            CP_UTF8,
-            0,
-            text.c_str(),
-            static_cast<int>(text.size()),
-            utf8.data(),
-            bytesRequired,
-            nullptr,
-            nullptr);
-    }
-
-    HANDLE file = CreateFileW(
-        path.c_str(),
-        GENERIC_WRITE,
-        FILE_SHARE_READ,
-        nullptr,
-        CREATE_ALWAYS,
-        FILE_ATTRIBUTE_NORMAL,
-        nullptr);
-
-    if (file == INVALID_HANDLE_VALUE) {
-        return false;
-    }
-
-    DWORD written = 0;
-    const BOOL ok = WriteFile(
-        file,
-        utf8.data(),
-        static_cast<DWORD>(utf8.size()),
-        &written,
-        nullptr);
-    CloseHandle(file);
-
-    return ok != FALSE &&
-        written == static_cast<DWORD>(utf8.size());
-}
-
-bool ChooseExportPath(
-    HWND owner,
-    dkcolorlib::PaletteExportFormat format,
-    std::wstring* path) {
-    if (path == nullptr) {
-        return false;
-    }
-
-    const wchar_t* filter = nullptr;
-    const wchar_t* extension = nullptr;
-    const wchar_t* defaultName = nullptr;
-
-    switch (format) {
-    case dkcolorlib::PaletteExportFormat::CssVariables:
-        filter = L"CSS (*.css)\0*.css\0All files (*.*)\0*.*\0";
-        extension = L"css";
-        defaultName = L"dk-color-palette.css";
-        break;
-    case dkcolorlib::PaletteExportFormat::Json:
-        filter = L"JSON (*.json)\0*.json\0All files (*.*)\0*.*\0";
-        extension = L"json";
-        defaultName = L"dk-color-palette.json";
-        break;
-    case dkcolorlib::PaletteExportFormat::Tailwind:
-        filter = L"JavaScript (*.js)\0*.js\0All files (*.*)\0*.*\0";
-        extension = L"js";
-        defaultName = L"dk-color-tailwind.js";
-        break;
-    case dkcolorlib::PaletteExportFormat::GimpGpl:
-        filter = L"GIMP Palette (*.gpl)\0*.gpl\0All files (*.*)\0*.*\0";
-        extension = L"gpl";
-        defaultName = L"dk-color-palette.gpl";
-        break;
-    }
-
-    std::array<wchar_t, MAX_PATH> buffer{};
-    wcscpy_s(buffer.data(), buffer.size(), defaultName);
-
-    OPENFILENAMEW dialog{};
-    dialog.lStructSize = sizeof(dialog);
-    dialog.hwndOwner = owner;
-    dialog.lpstrFilter = filter;
-    dialog.lpstrFile = buffer.data();
-    dialog.nMaxFile = static_cast<DWORD>(buffer.size());
-    dialog.lpstrDefExt = extension;
-    dialog.Flags =
-        OFN_OVERWRITEPROMPT |
-        OFN_PATHMUSTEXIST |
-        OFN_NOCHANGEDIR;
-
-    if (GetSaveFileNameW(&dialog) == FALSE) {
-        return false;
-    }
-
-    *path = buffer.data();
-    return true;
-}
-
-void ExportFavorites(
-    HWND hwnd,
-    UtilityState* state,
-    dkcolorlib::PaletteExportFormat format) {
-    if (state == nullptr) {
-        return;
-    }
-
-    RefreshLibraryState(state);
-    if (state->favoriteColors.empty()) {
-        const std::wstring message = dkl10n::Text(L"dialog.no_favorites");
-        MessageBoxW(
-            hwnd,
-            message.c_str(),
-            L"DK Color Picker",
-            MB_OK | MB_ICONINFORMATION);
-        return;
-    }
-
-    std::wstring path;
-    if (!ChooseExportPath(hwnd, format, &path)) {
-        return;
-    }
-
-    const std::wstring output =
-        dkcolorlib::ExportPaletteText(state->favoriteColors, format);
-
-    if (!WriteUtf8File(path, output)) {
-        const std::wstring message = dkl10n::Text(L"dialog.export_failed");
-        MessageBoxW(
-            hwnd,
-            message.c_str(),
-            L"DK Color Picker",
-            MB_OK | MB_ICONERROR);
-        return;
-    }
-
-    const std::wstring message = dkl10n::Text(L"dialog.export_done");
-    MessageBoxW(
-        hwnd,
-        message.c_str(),
-        L"DK Color Picker",
-        MB_OK | MB_ICONINFORMATION);
 }
 
 void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
