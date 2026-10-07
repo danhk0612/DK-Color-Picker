@@ -790,49 +790,6 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
         HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
 
-        state->inputLabel = CreateWindowExW(
-            0,
-            L"STATIC",
-            L"",
-            WS_CHILD | WS_VISIBLE,
-            0, 0, 0, 0,
-            hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kInputLabelId)),
-            GetModuleHandleW(nullptr),
-            nullptr);
-
-        state->input = CreateWindowExW(
-            WS_EX_CLIENTEDGE,
-            L"EDIT",
-            L"",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | ES_AUTOHSCROLL,
-            0, 0, 0, 0,
-            hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kInputId)),
-            GetModuleHandleW(nullptr),
-            nullptr);
-
-        state->apply = CreateWindowExW(
-            0, L"BUTTON", L"",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kApplyId)),
-            GetModuleHandleW(nullptr), nullptr);
-
-        state->favorite = CreateWindowExW(
-            0, L"BUTTON", L"",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kFavoriteId)),
-            GetModuleHandleW(nullptr), nullptr);
-
-        state->formatLabel = CreateWindowExW(
-            0, L"STATIC", L"",
-            WS_CHILD | WS_VISIBLE,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kFormatLabelId)),
-            GetModuleHandleW(nullptr), nullptr);
-
         for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
             const DWORD groupStyle = index == 0 ? WS_GROUP : 0;
             state->formatRadios[index] = CreateWindowExW(
@@ -851,63 +808,23 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
         }
 
         state->clearRecent = CreateWindowExW(
-            0, L"BUTTON", L"",
+            0,
+            L"BUTTON",
+            L"",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kClearRecentId)),
-            GetModuleHandleW(nullptr), nullptr);
+            0, 0, 0, 0,
+            hwnd,
+            reinterpret_cast<HMENU>(
+                static_cast<INT_PTR>(kClearRecentId)),
+            GetModuleHandleW(nullptr),
+            nullptr);
 
-        state->exportCss = CreateWindowExW(
-            0, L"BUTTON", L"CSS",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportCssId)),
-            GetModuleHandleW(nullptr), nullptr);
-
-        state->exportJson = CreateWindowExW(
-            0, L"BUTTON", L"JSON",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportJsonId)),
-            GetModuleHandleW(nullptr), nullptr);
-
-        state->exportTailwind = CreateWindowExW(
-            0, L"BUTTON", L"Tailwind",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportTailwindId)),
-            GetModuleHandleW(nullptr), nullptr);
-
-        state->exportGimp = CreateWindowExW(
-            0, L"BUTTON", L"GIMP GPL",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportGimpId)),
-            GetModuleHandleW(nullptr), nullptr);
-
-        const std::array<HWND, 10> controls{
-            state->inputLabel,
-            state->input,
-            state->apply,
-            state->favorite,
-            state->formatLabel,
-            state->clearRecent,
-            state->exportCss,
-            state->exportJson,
-            state->exportTailwind,
-            state->exportGimp};
-
-        for (HWND control : controls) {
-            SetControlFont(control, font);
-        }
+        SetControlFont(state->clearRecent, font);
         for (HWND radio : state->formatRadios) {
             SetControlFont(radio, font);
         }
 
-        SendMessageW(state->input, EM_SETLIMITTEXT, 128, 0);
-
         LayoutControls(hwnd, state);
-        UpdateInput(state);
         RefreshLibraryState(state);
         ApplyLocalizedLabels(hwnd, state);
         ApplyTheme(hwnd, state);
@@ -940,6 +857,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
         const int controlId = LOWORD(wParam);
         const int formatCount = static_cast<int>(dkcolor::CopyFormat::Count);
+
         if (controlId >= kFormatRadioBaseId &&
             controlId < kFormatRadioBaseId + formatCount &&
             HIWORD(wParam) == BN_CLICKED) {
@@ -950,63 +868,19 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             if (state->onCopyFormatChanged != nullptr) {
                 state->onCopyFormatChanged(state->copyFormat);
             }
+
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
 
-        switch (LOWORD(wParam)) {
-        case kApplyId: {
-            const int length = GetWindowTextLengthW(state->input);
-            std::wstring value(static_cast<std::size_t>(length) + 1, L'\0');
-            GetWindowTextW(state->input, value.data(), length + 1);
-            value.resize(static_cast<std::size_t>(length));
-
-            COLORREF parsed = RGB(0, 0, 0);
-            if (!dkcolor::ParseColorText(value, &parsed)) {
-                const std::wstring dialogText = dkl10n::Text(L"dialog.invalid_color");
-                MessageBoxW(
-                    hwnd,
-                    dialogText.c_str(),
-                    L"DK Color Picker",
-                    MB_OK | MB_ICONWARNING);
-                return 0;
-            }
-
-            SetColorInternal(hwnd, state, parsed, true, false);
-            return 0;
-        }
-
-        case kFavoriteId:
-            dkcolorlib::ToggleFavoriteColor(state->color);
-            RefreshLibraryState(state);
-            InvalidateRect(hwnd, nullptr, TRUE);
-            return 0;
-
-        case kClearRecentId:
+        if (controlId == kClearRecentId &&
+            HIWORD(wParam) == BN_CLICKED) {
             dkcolorlib::ClearRecentColors();
             RefreshLibraryState(state);
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
-
-        case kExportCssId:
-            ExportFavorites(
-                hwnd, state, dkcolorlib::PaletteExportFormat::CssVariables);
-            return 0;
-        case kExportJsonId:
-            ExportFavorites(
-                hwnd, state, dkcolorlib::PaletteExportFormat::Json);
-            return 0;
-        case kExportTailwindId:
-            ExportFavorites(
-                hwnd, state, dkcolorlib::PaletteExportFormat::Tailwind);
-            return 0;
-        case kExportGimpId:
-            ExportFavorites(
-                hwnd, state, dkcolorlib::PaletteExportFormat::GimpGpl);
-            return 0;
-        default:
-            break;
         }
+
         break;
     }
 
@@ -1014,22 +888,43 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
         if (state != nullptr) {
             POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
 
+            if (HandleColorSwatchClick(
+                    hwnd,
+                    state,
+                    point,
+                    state->currentRect,
+                    state->color)) {
+                return 0;
+            }
+
+            if (PointInside(state->cssNameRect, point)) {
+                FlashSwatch(hwnd, state, state->cssNameRect);
+                if (state->onCopyText != nullptr) {
+                    const dkcolor::CssNamedColor nearest =
+                        dkcolor::NearestCssNamedColor(state->color);
+                    state->onCopyText(nearest.name);
+                }
+                return 0;
+            }
+
             for (std::size_t index = 0; index < state->toneRects.size(); ++index) {
-                if (PointInside(state->toneRects[index], point)) {
-                    FlashSwatch(hwnd, state, state->toneRects[index]);
-                    if (state->onCopyColor != nullptr) {
-                        state->onCopyColor(state->tones[index]);
-                    }
+                if (HandleColorSwatchClick(
+                        hwnd,
+                        state,
+                        point,
+                        state->toneRects[index],
+                        state->tones[index])) {
                     return 0;
                 }
             }
 
             for (std::size_t index = 0; index < state->harmonyRects.size(); ++index) {
-                if (PointInside(state->harmonyRects[index], point)) {
-                    FlashSwatch(hwnd, state, state->harmonyRects[index]);
-                    if (state->onCopyColor != nullptr) {
-                        state->onCopyColor(state->harmonies[index]);
-                    }
+                if (HandleColorSwatchClick(
+                        hwnd,
+                        state,
+                        point,
+                        state->harmonyRects[index],
+                        state->harmonies[index])) {
                     return 0;
                 }
             }
@@ -1129,16 +1024,16 @@ HWND CreateUtilityWindow(
     dkcolor::CopyFormat copyFormat,
     const std::wstring& customTemplate,
     dktheme::ThemeMode theme,
-    ColorChangedCallback onColorChanged,
     CopyColorCallback onCopyColor,
+    CopyTextCallback onCopyText,
     CopyFormatChangedCallback onCopyFormatChanged) {
     auto* state = new UtilityState();
     state->color = color;
     state->copyFormat = copyFormat;
     state->customTemplate = customTemplate;
     state->theme = theme;
-    state->onColorChanged = onColorChanged;
     state->onCopyColor = onCopyColor;
+    state->onCopyText = onCopyText;
     state->onCopyFormatChanged = onCopyFormatChanged;
 
     HWND window = CreateWindowExW(
@@ -1149,7 +1044,7 @@ HWND CreateUtilityWindow(
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         780,
-        805,
+        720,
         owner,
         nullptr,
         instance,
@@ -1161,7 +1056,7 @@ HWND CreateUtilityWindow(
     }
 
     const int dpi = static_cast<int>(GetDpiForWindow(window));
-    RECT client{0, 0, MulDiv(760, dpi, 96), MulDiv(770, dpi, 96)};
+    RECT client{0, 0, MulDiv(760, dpi, 96), MulDiv(680, dpi, 96)};
     AdjustWindowRectExForDpi(
         &client,
         WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
@@ -1188,7 +1083,7 @@ void ShowUtilityWindow(HWND hwnd, COLORREF color) {
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    SetColorInternal(hwnd, state, color, false, false);
+    SetColorInternal(hwnd, state, color);
 
     ShowWindow(hwnd, SW_SHOWNORMAL);
     SetForegroundWindow(hwnd);
@@ -1201,7 +1096,7 @@ void SetUtilityWindowColor(HWND hwnd, COLORREF color) {
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    SetColorInternal(hwnd, state, color, false, false);
+    SetColorInternal(hwnd, state, color);
 }
 
 void SetUtilityCopyFormat(HWND hwnd, dkcolor::CopyFormat copyFormat) {
@@ -1217,6 +1112,7 @@ void SetUtilityCopyFormat(HWND hwnd, dkcolor::CopyFormat copyFormat) {
 
     state->copyFormat = copyFormat;
     RefreshFormatRadios(state);
+    InvalidateRect(hwnd, nullptr, TRUE);
 }
 
 void SetUtilityCustomTemplate(
