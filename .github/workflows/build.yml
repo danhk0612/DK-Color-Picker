@@ -1,0 +1,39 @@
+name: Build
+
+on:
+  push:
+    branches:
+      - main
+      - "task/**"
+  pull_request:
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -A x64
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Measure startup and memory
+        shell: pwsh
+        run: ./tools/measure.ps1 -ExePath build/Release/DKColorPicker.exe -Samples 3
+
+      - name: Package
+        shell: pwsh
+        run: ./tools/package.ps1 -ExePath build/Release/DKColorPicker.exe
+
+      - name: Upload executable and package
+        uses: actions/upload-artifact@v4
+        with:
+          name: DKColorPicker-win-x64
+          path: |
+            build/Release/DKColorPicker.exe
+            dist/DKColorPicker-win-x64.zip
+          if-no-files-found: error
