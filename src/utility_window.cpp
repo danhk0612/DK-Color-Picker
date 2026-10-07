@@ -24,7 +24,7 @@ constexpr int kApplyId = 3002;
 constexpr int kFavoriteId = 3003;
 constexpr int kClearRecentId = 3004;
 constexpr int kFormatLabelId = 3005;
-constexpr int kFormatComboId = 3006;
+constexpr int kFormatRadioBaseId = 3020;
 constexpr int kExportCssId = 3010;
 constexpr int kExportJsonId = 3011;
 constexpr int kExportTailwindId = 3012;
@@ -35,7 +35,7 @@ struct UtilityState {
     HWND apply = nullptr;
     HWND favorite = nullptr;
     HWND formatLabel = nullptr;
-    HWND formatCombo = nullptr;
+    std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)> formatRadios{};
     HWND clearRecent = nullptr;
     HWND exportCss = nullptr;
     HWND exportJson = nullptr;
@@ -46,6 +46,7 @@ struct UtilityState {
     dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
     dktheme::ThemeMode theme = dktheme::ThemeMode::System;
     ColorChangedCallback onColorChanged = nullptr;
+    CopyColorCallback onCopyColor = nullptr;
     CopyFormatChangedCallback onCopyFormatChanged = nullptr;
 
     HBRUSH backgroundBrush = nullptr;
@@ -132,27 +133,28 @@ void SetControlFont(HWND control, HFONT font) {
     }
 }
 
-void PopulateFormatCombo(UtilityState* state) {
-    if (state == nullptr || state->formatCombo == nullptr) {
+void RefreshFormatRadios(UtilityState* state) {
+    if (state == nullptr) {
         return;
     }
 
-    SendMessageW(state->formatCombo, CB_RESETCONTENT, 0, 0);
-    const int count = static_cast<int>(dkcolor::CopyFormat::Count);
-    for (int index = 0; index < count; ++index) {
+    for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
+        HWND radio = state->formatRadios[index];
+        if (radio == nullptr) {
+            continue;
+        }
+
         const auto format = static_cast<dkcolor::CopyFormat>(index);
         const std::wstring label = CopyFormatDisplayName(format);
-        SendMessageW(
-            state->formatCombo,
-            CB_ADDSTRING,
-            0,
-            reinterpret_cast<LPARAM>(label.c_str()));
+        SetWindowTextW(radio, label.c_str());
     }
-    SendMessageW(
-        state->formatCombo,
-        CB_SETCURSEL,
-        static_cast<WPARAM>(state->copyFormat),
-        0);
+
+    CheckRadioButton(
+        GetParent(state->formatLabel),
+        kFormatRadioBaseId,
+        kFormatRadioBaseId +
+            static_cast<int>(dkcolor::CopyFormat::Count) - 1,
+        kFormatRadioBaseId + static_cast<int>(state->copyFormat));
 }
 
 void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
@@ -171,7 +173,7 @@ void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
     SetWindowTextW(state->formatLabel, format.c_str());
     SetWindowTextW(state->clearRecent, clear.c_str());
 
-    PopulateFormatCombo(state);
+    RefreshFormatRadios(state);
 }
 
 void ApplyTheme(HWND hwnd, UtilityState* state) {
@@ -187,16 +189,19 @@ void ApplyTheme(HWND hwnd, UtilityState* state) {
         state->apply,
         state->favorite,
         state->formatLabel,
-        state->formatCombo,
         state->clearRecent,
         state->exportCss,
         state->exportJson,
-        state->exportTailwind};
+        state->exportTailwind,
+        state->exportGimp};
 
     for (HWND control : controls) {
         dktheme::ApplyControl(control, state->theme);
     }
-    dktheme::ApplyControl(state->exportGimp, state->theme);
+
+    for (HWND radio : state->formatRadios) {
+        dktheme::ApplyControl(radio, state->theme);
+    }
 }
 
 void LayoutControls(HWND hwnd, UtilityState* state) {
@@ -232,17 +237,25 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
     MoveWindow(
         state->formatLabel,
         margin,
-        formatY + Scale(hwnd, 4),
-        Scale(hwnd, 92),
+        formatY + Scale(hwnd, 3),
+        Scale(hwnd, 76),
         Scale(hwnd, 24),
         TRUE);
-    MoveWindow(
-        state->formatCombo,
-        margin + Scale(hwnd, 98),
-        formatY,
-        Scale(hwnd, 230),
-        Scale(hwnd, 200),
-        TRUE);
+
+    const std::array<int, static_cast<std::size_t>(dkcolor::CopyFormat::Count)> formatWidths{
+        54, 54, 54, 54, 58, 62, 68, 68, 108};
+    int formatX = margin + Scale(hwnd, 80);
+    for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
+        const int width = Scale(hwnd, formatWidths[index]);
+        MoveWindow(
+            state->formatRadios[index],
+            formatX,
+            formatY,
+            width,
+            Scale(hwnd, 24),
+            TRUE);
+        formatX += width + Scale(hwnd, 4);
+    }
 
     const int actionY = Scale(hwnd, 700);
     MoveWindow(
@@ -365,8 +378,8 @@ void DrawSwatch(
     DeleteObject(border);
 
     HGDIOBJ oldFont = SelectObject(hdc, font);
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, BestTextColor(color));
+    const int oldBkMode = SetBkMode(hdc, TRANSPARENT);
+    const COLORREF oldTextColor = SetTextColor(hdc, BestTextColor(color));
 
     RECT textRect = rect;
     DrawTextW(
@@ -376,6 +389,9 @@ void DrawSwatch(
         &textRect,
         DT_CENTER | DT_VCENTER | DT_SINGLELINE |
             (compact ? DT_END_ELLIPSIS : 0));
+
+    SetTextColor(hdc, oldTextColor);
+    SetBkMode(hdc, oldBkMode);
     SelectObject(hdc, oldFont);
 }
 
