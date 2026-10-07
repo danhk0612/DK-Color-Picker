@@ -15,7 +15,7 @@ struct Entry {
     const wchar_t* en;
 };
 
-constexpr std::array<Entry, 43> kEntries{{
+constexpr std::array<Entry, 44> kEntries{{
     {L"app.title", L"DK Color Picker", L"DK Color Picker"},
     {L"tray.pick", L"색 추출", L"Pick color"},
     {L"tray.tools", L"색상 도구 열기", L"Open color tools"},
@@ -50,6 +50,7 @@ constexpr std::array<Entry, 43> kEntries{{
     {L"dialog.hotkey_failed", L"선택한 전역 단축키를 등록하지 못했습니다.\n다른 프로그램에서 이미 사용 중일 수 있습니다.", L"Could not register that global hotkey.\nAnother program may already be using it."},
     {L"dialog.autostart_failed", L"자동 시작 설정을 변경하지 못했습니다.", L"Could not change the startup setting."},
     {L"dialog.capture_failed", L"화면을 캡처하지 못했습니다.", L"Could not capture the screen."},
+    {L"dialog.favorite_limit", L"즐겨찾기는 최대 8개까지 저장할 수 있습니다.\n기존 즐겨찾기를 하나 제거한 뒤 다시 시도하세요.", L"Favorites are limited to 8 colors.\nRemove an existing favorite and try again."},
     {L"template.title", L"DK Color Picker - 사용자 템플릿", L"DK Color Picker - Custom Template"},
     {L"template.heading", L"사용자 정의 복사 템플릿", L"Custom copy template"},
     {L"template.save", L"저장", L"Save"},
