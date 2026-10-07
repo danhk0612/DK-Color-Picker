@@ -123,6 +123,8 @@ bool g_hasCursorPoint = false;
 bool g_hotkeyRegistered = false;
 COLORREF g_currentColor = RGB(59, 130, 246);
 
+dkcolor::CopyFormat CurrentCopyFormat();
+
 template <typename T, std::size_t N>
 bool Contains(const std::array<T, N>& values, const T& value) {
     return std::find(values.begin(), values.end(), value) != values.end();
@@ -517,6 +519,46 @@ bool ChangeHotkeyPreset(HWND hwnd, int presetIndex) {
     return false;
 }
 
+std::wstring TrayTooltipText() {
+    std::wstring tooltip = kAppName;
+    const std::vector<COLORREF> recent =
+        dkcolorlib::LoadRecentColors();
+
+    if (!recent.empty()) {
+        const std::wstring code = dkcolor::FormatColor(
+            recent.front(),
+            CurrentCopyFormat(),
+            g_settings.customTemplate);
+
+        if (!code.empty()) {
+            tooltip += L" - ";
+            tooltip += code;
+        }
+    }
+
+    return tooltip;
+}
+
+void ApplyTrayTooltipText() {
+    const std::wstring tooltip = TrayTooltipText();
+    wcsncpy_s(
+        g_tray.szTip,
+        _countof(g_tray.szTip),
+        tooltip.c_str(),
+        _TRUNCATE);
+}
+
+void UpdateTrayTooltip() {
+    if (g_tray.cbSize == 0) {
+        return;
+    }
+
+    g_tray.uFlags =
+        NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
+    ApplyTrayTooltipText();
+    Shell_NotifyIconW(NIM_MODIFY, &g_tray);
+}
+
 void RemoveTrayIcon() {
     if (g_tray.cbSize != 0) {
         Shell_NotifyIconW(NIM_DELETE, &g_tray);
@@ -529,13 +571,14 @@ bool AddTrayIcon(HWND hwnd) {
     g_tray.cbSize = sizeof(g_tray);
     g_tray.hWnd = hwnd;
     g_tray.uID = kTrayId;
-    g_tray.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    g_tray.uFlags =
+        NIF_MESSAGE | NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     g_tray.uCallbackMessage = kTrayCallback;
     g_tray.hIcon = LoadIconW(g_instance, MAKEINTRESOURCEW(IDI_APP_ICON));
     if (g_tray.hIcon == nullptr) {
         g_tray.hIcon = LoadIconW(nullptr, IDI_APPLICATION);
     }
-    wcscpy_s(g_tray.szTip, kAppName);
+    ApplyTrayTooltipText();
 
     if (Shell_NotifyIconW(NIM_ADD, &g_tray) == FALSE) {
         return false;
@@ -694,8 +737,6 @@ void SetAverageSize(HWND hwnd, int averageSize) {
 }
 
 
-dkcolor::CopyFormat CurrentCopyFormat();
-
 void OnUtilityCopyColor(COLORREF color) {
     const std::wstring text = dkcolor::FormatColor(
         color,
@@ -711,7 +752,12 @@ void OnUtilityCopyText(const std::wstring& text) {
 void OnUtilityCopyFormatChanged(dkcolor::CopyFormat format) {
     g_settings.copyFormat = static_cast<int>(format);
     SaveSettings();
+    UpdateTrayTooltip();
     OnUtilityCopyColor(g_currentColor);
+}
+
+void OnUtilityRecentColorsChanged() {
+    UpdateTrayTooltip();
 }
 
 dktheme::ThemeMode CurrentThemeMode() {
@@ -747,7 +793,8 @@ void OpenUtilityWindow() {
             CurrentThemeMode(),
             OnUtilityCopyColor,
             OnUtilityCopyText,
-            OnUtilityCopyFormatChanged);
+            OnUtilityCopyFormatChanged,
+            OnUtilityRecentColorsChanged);
     }
 
     if (g_utilityWindow != nullptr) {
@@ -778,6 +825,7 @@ void FinishPicking(HWND hwnd, int x, int y) {
     const COLORREF color = SampleColorAt(x, y);
     g_currentColor = color;
     dkcolorlib::AddRecentColor(color);
+    UpdateTrayTooltip();
 
     if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
         dkcolorui::SetUtilityWindowColor(g_utilityWindow, color);
@@ -1341,6 +1389,7 @@ bool ShowTemplateEditor(HWND owner) {
 
     g_settings.customTemplate = state.value;
     SaveSettings();
+    UpdateTrayTooltip();
 
     if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
         dkcolorui::SetUtilityCustomTemplate(
@@ -1561,6 +1610,7 @@ void ShowTrayMenu(HWND hwnd) {
                 dkcolor::CopyFormatAtDisplayIndex(
                     selected - kMenuFormatBase));
         SaveSettings();
+        UpdateTrayTooltip();
 
         if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
             dkcolorui::SetUtilityCopyFormat(
