@@ -219,7 +219,7 @@ CompactLayout CalculateCompactLayout(
     CompactLayout layout{};
 
     layout.recentTitleY = Scale(hwnd, 344);
-    layout.recentTop = layout.recentTitleY + Scale(hwnd, 22);
+    layout.recentTop = layout.recentTitleY + Scale(hwnd, 30);
 
     const int recentRows =
         state == nullptr ? 0 : LibraryRows(state->recentColors.size());
@@ -565,10 +565,12 @@ void DrawHarmonyRow(
     const int labelWidth = Scale(hwnd, 96);
     const int gap = Scale(hwnd, 5);
     const int swatchLeft = margin + labelWidth;
-    const int usableWidth =
-        Scale(hwnd, kClientWidth - kMargin) - swatchLeft;
-    const int swatchWidth =
-        (usableWidth - gap * 2) / 3;
+    const int swatchRight =
+        Scale(hwnd, kClientWidth - kMargin);
+    const int usableWidth = swatchRight - swatchLeft;
+    const int totalGap =
+        gap * static_cast<int>(count - 1);
+    const int colorWidth = usableWidth - totalGap;
     const int swatchHeight = Scale(hwnd, 28);
 
     RECT labelRect{
@@ -591,14 +593,21 @@ void DrawHarmonyRow(
             break;
         }
 
-        const int x =
+        const int indexInt = static_cast<int>(index);
+        const int countInt = static_cast<int>(count);
+        const int left =
             swatchLeft +
-            static_cast<int>(index) * (swatchWidth + gap);
+            (colorWidth * indexInt) / countInt +
+            gap * indexInt;
+        const int right =
+            swatchLeft +
+            (colorWidth * (indexInt + 1)) / countInt +
+            gap * indexInt;
 
         RECT rect{
-            x,
+            left,
             top,
-            x + swatchWidth,
+            right,
             top + swatchHeight};
 
         state->harmonies[target] = colors[index];
