@@ -88,21 +88,17 @@ DK Color Picker compares the current color with all 148 CSS named colors and sho
 
 Click **Similar CSS: color-name** to copy the CSS color name itself.
 
-### Tones
+### Harmony colors
 
-Five tone swatches are generated from the current color:
+Color Tools groups harmony suggestions by relationship to the picked color:
 
-`lighter 50% · lighter 25% · original · darker 25% · darker 50%`
+- **Complementary**: 1 color at +180°
+- **Analogous**: 2 colors at -30° / +30°
+- **Triadic**: 2 colors at -120° / +120°
+- **Split complementary**: 2 colors at +150° / +210°
+- **Square**: 3 colors at +90° / +180° / +270°
 
-Click a tone to copy it. Tone clicks do not replace the current picked color and are not added to Recent Colors.
-
-### Harmony
-
-Harmony suggestions include:
-
-`complementary · analogous -30° · analogous +30° · triadic -120° · triadic +120°`
-
-Click a harmony color to copy it. Harmony clicks do not replace the current picked color and are not added to Recent Colors.
+Click any harmony swatch to copy its code. Harmony clicks do not replace the picked color and are not added to Recent Colors.
 
 ### Recent colors
 
@@ -135,9 +131,14 @@ The width is kept large enough to display color codes without making the window 
 
 ## WCAG contrast
 
-Color Tools shows contrast ratios between the current color and white/black.
+Color Tools evaluates white text and black text separately against the picked color.
 
-This is useful when checking text/background combinations for accessibility.
+For each text color it shows the contrast ratio and explicit `True / False` results for:
+
+- normal text: WCAG AA (4.5:1) and AAA (7:1)
+- large text: WCAG AA (3:1) and AAA (4.5:1)
+
+This makes it clear whether white or black text is suitable for the selected background color.
 
 ## Tray settings
 
