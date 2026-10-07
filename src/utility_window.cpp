@@ -155,7 +155,7 @@ void RefreshFormatRadios(HWND hwnd, UtilityState* state) {
             continue;
         }
 
-        const auto format = static_cast<dkcolor::CopyFormat>(index);
+        const auto format = dkcolor::CopyFormatAtDisplayIndex(index);
         const std::wstring label = CopyFormatDisplayName(format);
         SetWindowTextW(radio, label.c_str());
     }
@@ -165,7 +165,9 @@ void RefreshFormatRadios(HWND hwnd, UtilityState* state) {
         kFormatRadioBaseId,
         kFormatRadioBaseId +
             static_cast<int>(dkcolor::CopyFormat::Count) - 1,
-        kFormatRadioBaseId + static_cast<int>(state->copyFormat));
+        kFormatRadioBaseId +
+            static_cast<int>(
+                dkcolor::CopyFormatDisplayIndex(state->copyFormat)));
 }
 
 void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
@@ -306,7 +308,7 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
     const int formatY = Scale(hwnd, 10);
 
     const std::array<int, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
-        formatWidths{54, 54, 54, 54, 58, 62, 68, 68, 108};
+        formatWidths{54, 54, 64, 54, 54, 58, 62, 68, 68, 108};
 
     int formatX = margin;
     for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
@@ -975,8 +977,9 @@ LRESULT CALLBACK UtilityProc(
             controlId < kFormatRadioBaseId + formatCount &&
             HIWORD(wParam) == BN_CLICKED) {
             state->copyFormat =
-                static_cast<dkcolor::CopyFormat>(
-                    controlId - kFormatRadioBaseId);
+                dkcolor::CopyFormatAtDisplayIndex(
+                    static_cast<std::size_t>(
+                        controlId - kFormatRadioBaseId));
 
             RefreshFormatRadios(hwnd, state);
 
