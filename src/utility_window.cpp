@@ -8,6 +8,7 @@
 #include "theme.h"
 #include "resource.h"
 
+#include <algorithm>
 #include <array>
 #include <cwchar>
 #include <string>
