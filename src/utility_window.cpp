@@ -19,6 +19,7 @@ namespace dkcolorui {
 namespace {
 
 constexpr wchar_t kUtilityClass[] = L"DKColorPicker.UtilityWindow";
+constexpr int kInputLabelId = 3000;
 constexpr int kInputId = 3001;
 constexpr int kApplyId = 3002;
 constexpr int kFavoriteId = 3003;
@@ -32,6 +33,7 @@ constexpr int kExportGimpId = 3013;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
 
 struct UtilityState {
+    HWND inputLabel = nullptr;
     HWND input = nullptr;
     HWND apply = nullptr;
     HWND favorite = nullptr;
@@ -181,10 +183,12 @@ void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
     const std::wstring title = dkl10n::Text(L"tools.title");
     SetWindowTextW(hwnd, title.c_str());
 
+    const std::wstring inputLabel = dkl10n::Text(L"tools.direct_input");
     const std::wstring apply = dkl10n::Text(L"tools.apply");
     const std::wstring format = dkl10n::Text(L"tools.copy_format");
     const std::wstring clear = dkl10n::Text(L"tools.clear_recent");
 
+    SetWindowTextW(state->inputLabel, inputLabel.c_str());
     SetWindowTextW(state->apply, apply.c_str());
     SetWindowTextW(state->formatLabel, format.c_str());
     SetWindowTextW(state->clearRecent, clear.c_str());
@@ -200,7 +204,8 @@ void ApplyTheme(HWND hwnd, UtilityState* state) {
     RecreateThemeBrushes(state);
     dktheme::ApplyWindow(hwnd, state->theme);
 
-    const std::array<HWND, 9> controls{
+    const std::array<HWND, 10> controls{
+        state->inputLabel,
         state->input,
         state->apply,
         state->favorite,
@@ -227,23 +232,37 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
 
     const int margin = Scale(hwnd, 20);
     const int top = Scale(hwnd, 16);
-    const int inputWidth = Scale(hwnd, 300);
+    const int inputLabelWidth = Scale(hwnd, 92);
+    const int inputWidth = Scale(hwnd, 236);
     const int inputHeight = Scale(hwnd, 28);
-    const int applyWidth = Scale(hwnd, 72);
+    const int applyWidth = Scale(hwnd, 92);
     const int favoriteWidth = Scale(hwnd, 132);
     const int gap = Scale(hwnd, 8);
 
-    MoveWindow(state->input, margin, top, inputWidth, inputHeight, TRUE);
+    MoveWindow(
+        state->inputLabel,
+        margin,
+        top + Scale(hwnd, 4),
+        inputLabelWidth,
+        Scale(hwnd, 24),
+        TRUE);
+    MoveWindow(
+        state->input,
+        margin + inputLabelWidth + gap,
+        top,
+        inputWidth,
+        inputHeight,
+        TRUE);
     MoveWindow(
         state->apply,
-        margin + inputWidth + gap,
+        margin + inputLabelWidth + gap + inputWidth + gap,
         top,
         applyWidth,
         inputHeight,
         TRUE);
     MoveWindow(
         state->favorite,
-        margin + inputWidth + gap + applyWidth + gap,
+        margin + inputLabelWidth + gap + inputWidth + gap + applyWidth + gap,
         top,
         favoriteWidth,
         inputHeight,
@@ -976,6 +995,17 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
         HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
 
+        state->inputLabel = CreateWindowExW(
+            0,
+            L"STATIC",
+            L"",
+            WS_CHILD | WS_VISIBLE,
+            0, 0, 0, 0,
+            hwnd,
+            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kInputLabelId)),
+            GetModuleHandleW(nullptr),
+            nullptr);
+
         state->input = CreateWindowExW(
             WS_EX_CLIENTEDGE,
             L"EDIT",
@@ -1060,7 +1090,8 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportGimpId)),
             GetModuleHandleW(nullptr), nullptr);
 
-        const std::array<HWND, 9> controls{
+        const std::array<HWND, 10> controls{
+            state->inputLabel,
             state->input,
             state->apply,
             state->favorite,
