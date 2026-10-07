@@ -15,7 +15,7 @@ struct Entry {
     const wchar_t* en;
 };
 
-constexpr std::array<Entry, 38> kEntries{{
+constexpr std::array<Entry, 43> kEntries{{
     {L"app.title", L"DK Color Picker", L"DK Color Picker"},
     {L"tray.pick", L"색 추출", L"Pick color"},
     {L"tray.tools", L"색상 도구 열기", L"Open color tools"},
@@ -37,8 +37,13 @@ constexpr std::array<Entry, 38> kEntries{{
     {L"language.en", L"영어", L"English"},
     {L"tools.title", L"DK Color Picker - 색상 도구", L"DK Color Picker - Color Tools"},
     {L"tools.clear_recent", L"최근 색상 정리", L"Clear recent colors"},
-    {L"tools.tones", L"톤", L"Tones"},
-    {L"tools.harmony", L"조화", L"Harmony"},
+    {L"tools.pick", L"Pick", L"Pick"},
+    {L"tools.complementary", L"보색", L"Complementary"},
+    {L"tools.analogous", L"유사색", L"Analogous"},
+    {L"tools.triadic", L"삼각 배색", L"Triadic"},
+    {L"tools.split_complementary", L"분할 보색", L"Split comp."},
+    {L"tools.square", L"사각 배색", L"Square"},
+    {L"tools.wcag", L"WCAG 대비", L"WCAG contrast"},
     {L"tools.recent", L"최근 색상", L"Recent colors"},
     {L"tools.favorites", L"즐겨찾기", L"Favorites"},
     {L"tools.nearest_css", L"유사 CSS 코드", L"Similar CSS"},
