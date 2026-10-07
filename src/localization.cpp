@@ -41,7 +41,7 @@ constexpr std::array<Entry, 38> kEntries{{
     {L"tools.harmony", L"조화", L"Harmony"},
     {L"tools.recent", L"최근 색상", L"Recent colors"},
     {L"tools.favorites", L"즐겨찾기", L"Favorites"},
-    {L"tools.nearest_css", L"CSS", L"CSS"},
+    {L"tools.nearest_css", L"유사 CSS 코드", L"Similar CSS"},
     {L"dialog.hotkey_failed", L"선택한 전역 단축키를 등록하지 못했습니다.\n다른 프로그램에서 이미 사용 중일 수 있습니다.", L"Could not register that global hotkey.\nAnother program may already be using it."},
     {L"dialog.autostart_failed", L"자동 시작 설정을 변경하지 못했습니다.", L"Could not change the startup setting."},
     {L"dialog.capture_failed", L"화면을 캡처하지 못했습니다.", L"Could not capture the screen."},
