@@ -52,7 +52,6 @@ Status: implemented on task/t04-main-ui
 
 - Native Win32 color utility window opened from tray
 - Current color card with HEX / RGB / HSL / OKLCH
-- Direct input: #RGB, #RRGGBB, rgb(r,g,b), CSS named colors
 - Nearest CSS named color across all 148 names using CIELAB distance
 - Five tone steps using white/black mixing
 - Complementary, analogous and triadic harmony suggestions
@@ -63,23 +62,17 @@ Status: implemented on task/t04-main-ui
 - Closing the utility window hides it while the tray process remains resident
 - Tray double-click opens the utility window
 
-## T05 - Library and export
+## T05 - Color library
 
 Status: implemented on task/t05-library-export
 
 - Persistent recent-color library, maximum 20 unique colors
 - Duplicate recent colors move to the front
 - Persistent favorites, maximum 20 unique colors
-- Current-color favorite toggle
-- Clickable recent and favorite swatches in the utility window
+- Inline favorite toggles on color swatches
+- Copyable current / tone / harmony / recent / favorite swatches
 - Clear-recent action
 - Lightweight LocalAppData INI persistence without a database
-- Export favorites through native Windows Save As dialog
-- CSS custom properties export
-- JSON object export
-- Tailwind colors-object export
-- GIMP GPL palette export
-- UTF-8 file output
 
 ## T06 - Product polish
 
@@ -101,4 +94,4 @@ Status: implemented on task/t06-product-polish
 - Visual QA of light/dark controls on real Windows 10/11 desktops
 - Tune layout if translated strings are expanded substantially by external locales
 - Record representative startup/memory figures on release hardware
-- Add automated non-GUI tests for color conversion, parsing and export modules
+- Add automated non-GUI tests for color conversion and color-library modules
