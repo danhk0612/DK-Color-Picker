@@ -428,27 +428,28 @@ std::array<COLORREF, 5> ToneSteps(COLORREF color) {
 HarmonySet HarmonyColors(COLORREF color) {
     const ColorValues values = ConvertColor(color);
 
+    const auto shifted = [&](double degrees) {
+        return HslToColor(
+            values.hue + degrees,
+            values.hslS,
+            values.hslL);
+    };
+
     HarmonySet result;
-    result.complementary = HslToColor(
-        values.hue + 180.0,
-        values.hslS,
-        values.hslL);
-    result.analogousLeft = HslToColor(
-        values.hue - 30.0,
-        values.hslS,
-        values.hslL);
-    result.analogousRight = HslToColor(
-        values.hue + 30.0,
-        values.hslS,
-        values.hslL);
-    result.triadicLeft = HslToColor(
-        values.hue - 120.0,
-        values.hslS,
-        values.hslL);
-    result.triadicRight = HslToColor(
-        values.hue + 120.0,
-        values.hslS,
-        values.hslL);
+    result.complementary = shifted(180.0);
+    result.analogous = {
+        shifted(-30.0),
+        shifted(30.0)};
+    result.triadic = {
+        shifted(-120.0),
+        shifted(120.0)};
+    result.splitComplementary = {
+        shifted(150.0),
+        shifted(210.0)};
+    result.square = {
+        shifted(90.0),
+        shifted(180.0),
+        shifted(270.0)};
     return result;
 }
 
