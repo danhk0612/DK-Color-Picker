@@ -843,7 +843,7 @@ void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
                 state,
                 state->recentColors[index],
                 true,
-                true);
+                false);
             return;
         }
     }
@@ -858,7 +858,7 @@ void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
                 state,
                 state->favoriteColors[index],
                 true,
-                true);
+                false);
             return;
         }
     }
@@ -917,15 +917,22 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(kFormatLabelId)),
             GetModuleHandleW(nullptr), nullptr);
 
-        state->formatCombo = CreateWindowExW(
-            WS_EX_CLIENTEDGE,
-            L"COMBOBOX",
-            L"",
-            WS_CHILD | WS_VISIBLE | WS_TABSTOP |
-                CBS_DROPDOWNLIST | WS_VSCROLL,
-            0, 0, 0, 0, hwnd,
-            reinterpret_cast<HMENU>(static_cast<INT_PTR>(kFormatComboId)),
-            GetModuleHandleW(nullptr), nullptr);
+        for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
+            const DWORD groupStyle = index == 0 ? WS_GROUP : 0;
+            state->formatRadios[index] = CreateWindowExW(
+                0,
+                L"BUTTON",
+                L"",
+                WS_CHILD | WS_VISIBLE | WS_TABSTOP |
+                    BS_AUTORADIOBUTTON | groupStyle,
+                0, 0, 0, 0,
+                hwnd,
+                reinterpret_cast<HMENU>(
+                    static_cast<INT_PTR>(
+                        kFormatRadioBaseId + static_cast<int>(index))),
+                GetModuleHandleW(nullptr),
+                nullptr);
+        }
 
         state->clearRecent = CreateWindowExW(
             0, L"BUTTON", L"",
@@ -962,12 +969,11 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             reinterpret_cast<HMENU>(static_cast<INT_PTR>(kExportGimpId)),
             GetModuleHandleW(nullptr), nullptr);
 
-        const std::array<HWND, 10> controls{
+        const std::array<HWND, 9> controls{
             state->input,
             state->apply,
             state->favorite,
             state->formatLabel,
-            state->formatCombo,
             state->clearRecent,
             state->exportCss,
             state->exportJson,
@@ -976,6 +982,9 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
         for (HWND control : controls) {
             SetControlFont(control, font);
+        }
+        for (HWND radio : state->formatRadios) {
+            SetControlFont(radio, font);
         }
 
         SendMessageW(state->input, EM_SETLIMITTEXT, 128, 0);
@@ -1012,20 +1021,17 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             break;
         }
 
-        if (LOWORD(wParam) == kFormatComboId &&
-            HIWORD(wParam) == CBN_SELCHANGE) {
-            const LRESULT selected = SendMessageW(
-                state->formatCombo,
-                CB_GETCURSEL,
-                0,
-                0);
-            if (selected >= 0 &&
-                selected < static_cast<LRESULT>(dkcolor::CopyFormat::Count)) {
-                state->copyFormat =
-                    static_cast<dkcolor::CopyFormat>(selected);
-                if (state->onCopyFormatChanged != nullptr) {
-                    state->onCopyFormatChanged(state->copyFormat);
-                }
+        const int controlId = LOWORD(wParam);
+        const int formatCount = static_cast<int>(dkcolor::CopyFormat::Count);
+        if (controlId >= kFormatRadioBaseId &&
+            controlId < kFormatRadioBaseId + formatCount &&
+            HIWORD(wParam) == BN_CLICKED) {
+            state->copyFormat = static_cast<dkcolor::CopyFormat>(
+                controlId - kFormatRadioBaseId);
+            RefreshFormatRadios(state);
+
+            if (state->onCopyFormatChanged != nullptr) {
+                state->onCopyFormatChanged(state->copyFormat);
             }
             return 0;
         }
@@ -1048,7 +1054,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 return 0;
             }
 
-            SetColorInternal(hwnd, state, parsed, true, true);
+            SetColorInternal(hwnd, state, parsed, true, false);
             return 0;
         }
 
@@ -1091,16 +1097,18 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
             for (std::size_t index = 0; index < state->toneRects.size(); ++index) {
                 if (PointInside(state->toneRects[index], point)) {
-                    SetColorInternal(
-                        hwnd, state, state->tones[index], true, true);
+                    if (state->onCopyColor != nullptr) {
+                        state->onCopyColor(state->tones[index]);
+                    }
                     return 0;
                 }
             }
 
             for (std::size_t index = 0; index < state->harmonyRects.size(); ++index) {
                 if (PointInside(state->harmonyRects[index], point)) {
-                    SetColorInternal(
-                        hwnd, state, state->harmonies[index], true, true);
+                    if (state->onCopyColor != nullptr) {
+                        state->onCopyColor(state->harmonies[index]);
+                    }
                     return 0;
                 }
             }
@@ -1122,6 +1130,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
         break;
 
     case WM_CTLCOLORSTATIC:
+    case WM_CTLCOLORBTN:
         if (state != nullptr) {
             HDC hdc = reinterpret_cast<HDC>(wParam);
             SetTextColor(hdc, dktheme::TextColor(state->theme));
@@ -1187,12 +1196,14 @@ HWND CreateUtilityWindow(
     dkcolor::CopyFormat copyFormat,
     dktheme::ThemeMode theme,
     ColorChangedCallback onColorChanged,
+    CopyColorCallback onCopyColor,
     CopyFormatChangedCallback onCopyFormatChanged) {
     auto* state = new UtilityState();
     state->color = color;
     state->copyFormat = copyFormat;
     state->theme = theme;
     state->onColorChanged = onColorChanged;
+    state->onCopyColor = onCopyColor;
     state->onCopyFormatChanged = onCopyFormatChanged;
 
     HWND window = CreateWindowExW(
@@ -1270,13 +1281,7 @@ void SetUtilityCopyFormat(HWND hwnd, dkcolor::CopyFormat copyFormat) {
     }
 
     state->copyFormat = copyFormat;
-    if (state->formatCombo != nullptr) {
-        SendMessageW(
-            state->formatCombo,
-            CB_SETCURSEL,
-            static_cast<WPARAM>(copyFormat),
-            0);
-    }
+    RefreshFormatRadios(state);
 }
 
 void RefreshUtilityWindow(HWND hwnd, dktheme::ThemeMode theme) {
