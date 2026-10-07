@@ -1,259 +1,278 @@
 # DK Color Picker
 
-Windows 10/11용 초경량 화면 색상 추출기입니다.
+[English](README.md) | [한국어](README.ko.md)
 
-ColorPick과 같은 빠른 사용 흐름을 목표로 하지만, 기존 프로그램의 코드나 자산을 사용하지 않는 독립적인 MIT 구현입니다.
+A lightweight, portable color picker for Windows 10/11.
 
-## 현재 구현
+Press a hotkey, pick a color anywhere on your screen, and the selected color is copied to the clipboard immediately. DK Color Picker stays in the system tray and includes a compact Color Tools window for tones, harmony colors, recent colors, favorites, CSS color names, and WCAG contrast.
 
-- 네이티브 C++20 + Win32 API
-- 설치가 필요 없는 단일 EXE
-- 트레이 상주
-- 전역 단축키
-  - 기본값: Ctrl+Alt+C
-  - Ctrl+Shift+C / Alt+Shift+C / Ctrl+Alt+P / F8 선택 가능
-- 가상 데스크톱 전체 화면 캡처 후 화면 정지
-- 다중 모니터 좌표 및 Per-Monitor DPI Awareness V2
-- 8x / 12x / 16x / 24x / 32x / 48x 확대
-- 1x1 / 3x3 / 5x5 / 7x7 / 9x9 평균 색상 추출
-- 평균 영역과 현재 픽셀을 확대경에 구분 표시
-- 방향키 1픽셀 이동, 휠 또는 +/- 확대, 숫자 1/3/5/7/9 평균 범위 변경
-- Enter / Space / 좌클릭 선택, Esc / 우클릭 취소
-- 복사 형식
-  - HEX
-  - RGB
-  - RGBA
-  - HSL
-  - HSV
-  - HWB
-  - CMYK
-  - CIELAB
-  - OKLCH
-  - 사용자 정의 템플릿
-- 사용자 정의 복사 템플릿 편집 창
-- 메인 색상 도구 창
-  - 현재 색상 카드
-  - HEX / RGB / HSL / OKLCH 표시
-  - 가장 가까운 CSS named color
-  - 밝기/어둡기 톤 5단계
-  - 보색 / 유사색 / 삼각 배색
-  - 흰색·검정 대비 WCAG 판정
-  - 최근 색상 최대 20개
-  - 즐겨찾기 최대 20개
-  - 현재/톤/조화/최근/즐겨찾기 색상 상자 클릭 즉시 복사
-  - 각 색상 상자의 ☆/★ 버튼으로 즐겨찾기 추가/제거
-  - 최근 색상 정리
-  - 최근/즐겨찾기 개수에 맞춰 색상 도구 창 높이 자동 조절
-  - 즐겨찾기가 없으면 즐겨찾기 섹션 자동 숨김
-- 148개 CSS named color 전체를 CIELAB 거리로 비교
-- 창을 닫으면 종료하지 않고 트레이로 숨김
-- 트레이 더블클릭으로 색상 도구 창 열기
-- 트레이 메뉴에서 색 추출 / 색상 도구 / 확대 / 평균 / 복사 형식 / 단축키 / 자동 시작 / 종료 설정
-- **색 추출 후 항상 색상 도구 열기** 옵션
-- 색상 도구 창에서 복사 형식을 라디오 버튼 한 번 클릭으로 즉시 변경하고 트레이 설정과 동기화
-- 복사 형식 변경 즉시 현재 색상을 새 형식으로 클립보드에 복사
-- 현재 색 / 톤 / 조화 / 최근 / 즐겨찾기의 코드 표기를 선택한 복사 형식으로 통일
-- 시스템 / 라이트 / 다크 테마
-- 한국어 / 영어 내장
-- 선택적 외부 번역 INI override
-- 전용 EXE/창/트레이 아이콘
-- 설정 및 색상 라이브러리를 LocalAppData에 저장
-- HKCU Run 기반 사용자별 자동 시작
-- 중복 실행 방지
-- 정적 MSVC 런타임 사용으로 별도 런타임 설치 없이 실행
+## Download
 
-## 기본 사용법
+Download the latest release:
 
-1. DKColorPicker.exe를 실행합니다.
-2. 프로그램은 트레이에 상주합니다.
-3. Ctrl+Alt+C를 누릅니다.
-4. 원하는 픽셀을 선택합니다.
-5. 선택한 복사 형식의 값이 클립보드에 복사됩니다.
-6. 트레이 아이콘을 더블클릭하거나 **색상 도구 열기**를 선택하면 현재 색을 자세히 확인할 수 있습니다.
+**https://github.com/danhk0612/DK-Color-Picker/releases/latest**
 
-픽한 색은 자동으로 최근 색상에 저장됩니다. 트레이의 **색 추출 후 항상 색상 도구 열기**를 켜면 색 선택이 끝난 직후 색상 도구가 자동으로 열립니다. 색상 도구 창의 X 버튼은 프로그램 종료가 아니라 창 숨김입니다. 완전 종료는 트레이의 **종료**를 사용합니다.
+1. Download `DKColorPicker-win-x64.zip`.
+2. Extract the ZIP anywhere you like.
+3. Run `DKColorPicker.exe`.
 
-## 색상 도구 사용
+No installer or separate runtime is required.
 
-색상 상자를 클릭하면 현재 선택된 복사 형식으로 해당 색상 코드가 즉시 클립보드에 복사됩니다. 현재 픽한 색, 톤 단계, 조화 배색, 최근 색상, 즐겨찾기에 모두 같은 규칙이 적용됩니다.
+## Quick start
 
-각 색상 상자 오른쪽 위의 **☆/★** 영역은 복사가 아니라 즐겨찾기 추가/제거 기능입니다. 클릭하면 별 표시가 즉시 바뀝니다.
+1. Run `DKColorPicker.exe`.
+2. Press **Ctrl+Alt+C**.
+3. Move the cursor to the color you want.
+4. Left-click or press **Enter/Space**.
+5. The color is copied to the clipboard in the selected format.
 
-### CSS 이름 근사
+The app keeps running in the system tray.
 
-CSS의 148개 named color를 CIELAB 공간에서 비교해 가장 가까운 이름과 실제 named color 값을 표시합니다. 색상 도구의 `유사 CSS 코드: 이름`을 클릭하면 CSS 색상 이름 자체가 클립보드에 복사됩니다.
+- Double-click the tray icon to open **Color Tools**.
+- Right-click the tray icon to change picker settings or exit.
+- Closing the Color Tools window hides it; it does not exit the app.
 
-### 톤과 조화 배색
+## Picking colors
 
-톤 단계:
+While the picker is open:
 
-- 흰색 50% 혼합
-- 흰색 25% 혼합
-- 원본
-- 검정 25% 혼합
-- 검정 50% 혼합
+| Action | Control |
+| --- | --- |
+| Pick color | Left-click / Enter / Space |
+| Cancel | Esc / Right-click |
+| Move by 1 pixel | Arrow keys |
+| Zoom | Mouse wheel / + / - |
+| Average area | 1 / 3 / 5 / 7 / 9 |
 
-조화 배색:
+Available zoom levels:
 
-- 보색 180°
-- 유사색 -30° / +30°
-- 삼각 배색 -120° / +120°
+`8x · 12x · 16x · 24x · 32x · 48x`
 
-현재 색/톤/조화/최근/즐겨찾기 색상 사각형을 클릭하면 짧은 강조 테두리를 표시해 클릭이 인식됐는지 확인할 수 있습니다.
+Available average areas:
 
-### WCAG 대비
+`1x1 · 3x3 · 5x5 · 7x7 · 9x9`
 
-현재 색과 흰색/검정의 상대휘도 대비를 계산하고 다음 기준을 표시합니다.
+The screen is frozen while picking, so moving the cursor does not change the captured image.
 
-- AA 일반 텍스트: 4.5:1 이상
-- AAA 일반 텍스트: 7:1 이상
-- AA 큰 글자: 3:1 이상
-- AAA 큰 글자: 4.5:1 이상
+## Copy formats
 
-## 컴팩트 색상 도구
+Supported formats:
 
-색상 도구는 코드 가독성을 유지하도록 폭을 약간 줄이고, 세로 공간은 실제 저장된 색상 수에 맞춰 자동으로 조절합니다.
+`HEX · RGB · RGBA · HSL · HSV · HWB · CMYK · CIELAB · OKLCH · Custom template`
 
-- 최근 색상은 실제 개수만큼만 행을 사용
-- 즐겨찾기가 없으면 즐겨찾기 섹션을 표시하지 않음
-- 첫 즐겨찾기를 추가하면 필요한 만큼 창이 자동으로 확장
-- 마지막 즐겨찾기를 제거하면 다시 자동 축소
-- 최근 색상을 정리하면 빈 행을 남기지 않고 즉시 축소
-- 톤/조화/색상 코드 영역은 항상 표시
+RGBA uses an alpha value of `1` because screen pixels do not contain transparency information.
 
-## 최근 색상과 즐겨찾기
+You can change the format from the tray menu or directly from the radio buttons at the top of Color Tools.
 
-색상 라이브러리는 별도 DB 없이 다음 파일에 저장됩니다.
+When you change the format in Color Tools:
 
-    %LOCALAPPDATA%\DKColorPicker\colors.ini
+- the current picked color is copied immediately in the new format;
+- all visible color codes in Color Tools switch to that format;
+- the same format is used for future picks and swatch clicks.
 
-정책:
+## Color Tools
 
-- 최근 색상: 최대 20개
-- 화면 픽커에서 실제 선택한 색만 최근 색상에 추가
-- 같은 색을 다시 픽하면 맨 앞으로 이동
-- 톤/조화 배색, 최근/즐겨찾기 클릭은 최근 색상에 새로 기록하지 않음
-- 최근 색상 클릭은 해당 색을 현재 복사 형식으로 즉시 복사
-- 즐겨찾기: 최대 20개
-- 각 색상 상자의 ☆/★ 영역으로 즐겨찾기 추가/제거
-- `최근 색상 정리`로 최근 색상 목록을 비울 수 있음
+Open Color Tools by double-clicking the tray icon or choosing **Open Color Tools** from the tray menu.
 
-## 트레이 옵션과 색상 도구 복사 형식
+### Current color
 
-트레이에서 **색 추출 후 항상 색상 도구 열기**를 켜면 다음 흐름으로 동작합니다.
+The large current-color swatch shows the most recently picked screen color.
 
-1. 단축키로 화면을 캡처하고 색을 선택합니다.
-2. 선택한 복사 형식으로 클립보드 복사를 완료합니다.
-3. 캡처 오버레이를 닫습니다.
-4. 선택한 색이 반영된 색상 도구 창을 바로 엽니다.
+Click the swatch to copy it immediately.
 
-색상 도구 상단의 라디오 버튼에서 HEX/RGB/HSL/HSV/HWB/CMYK/CIELAB/OKLCH/사용자 템플릿을 한 번의 클릭으로 바로 변경할 수 있습니다. 별도의 "복사 형식" 라벨은 표시하지 않습니다. 라디오 버튼을 누르는 즉시 현재 픽한 색상이 새 형식으로 클립보드에 복사되고, 현재 색·톤·조화 배색·최근 색·즐겨찾기에 표시되는 코드도 모두 같은 형식으로 갱신됩니다. 트레이의 복사 형식과 동일한 설정을 사용합니다.
+Click the **☆ / ★** area on the swatch to add or remove it from Favorites.
 
-## 테마와 언어
+### Similar CSS code
 
-트레이에서 다음을 변경할 수 있습니다.
+DK Color Picker compares the current color with all 148 CSS named colors and shows the closest name.
 
-- 테마: 시스템 / 라이트 / 다크
-- 언어: 한국어 / 영어
+Click **Similar CSS: color-name** to copy the CSS color name itself.
 
-설정은 \`settings.ini\`에 저장됩니다.
+### Tones
 
-외부 번역은 선택 기능입니다. EXE 옆에 다음 파일을 두면 지정한 키만 내장 번역을 덮어씁니다.
+Five tone swatches are generated from the current color:
 
-    locales\ko.ini
-    locales\en.ini
+`lighter 50% · lighter 25% · original · darker 25% · darker 50%`
 
-예제는 저장소의 \`locales/*.ini.example\` 및 \`locales/README.md\`를 참고하세요. 외부 파일이 없어도 EXE 하나만으로 한국어와 영어가 모두 동작합니다.
+Click a tone to copy it. Tone clicks do not replace the current picked color and are not added to Recent Colors.
 
-## 사용자 정의 템플릿
+### Harmony
 
-트레이에서 **복사 형식 → 사용자 템플릿 편집...** 을 선택합니다.
+Harmony suggestions include:
 
-기본 템플릿:
+`complementary · analogous -30° · analogous +30° · triadic -120° · triadic +120°`
 
-    {hex} / {rgb} / {rgba}
+Click a harmony color to copy it. Harmony clicks do not replace the current picked color and are not added to Recent Colors.
 
-전체 형식 자리표시자:
+### Recent colors
 
-    {hex} {rgb} {rgba} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}
+Only colors actually picked from the screen are added to Recent Colors.
 
-구성요소 자리표시자:
+- Up to 20 unique colors are stored.
+- Picking the same color again moves it to the front.
+- Clicking a recent color copies it without creating another history entry.
+- Use **Clear recent colors** to empty the list.
 
-    {r} {g} {b}
-    {hsl_h} {hsl_s} {hsl_l}
-    {hsv_h} {hsv_s} {hsv_v}
-    {hwb_h} {hwb_w} {hwb_b}
-    {cmyk_c} {cmyk_m} {cmyk_y} {cmyk_k}
-    {lab_l} {lab_a} {lab_b}
-    {oklch_l} {oklch_c} {oklch_h}
+### Favorites
 
-## 설정 저장
+Use the **☆ / ★** control inside any color swatch to toggle Favorites.
 
-    %LOCALAPPDATA%\DKColorPicker\settings.ini
+Favorites can be added from the current color, tones, harmony colors, recent colors, or existing favorites.
 
-저장 항목:
+The Favorites section is hidden when empty and appears automatically when the first favorite is added.
 
-- 확대 배율
-- 평균 추출 범위
-- 전역 단축키 프리셋
-- 복사 형식
-- 사용자 정의 템플릿
+## Compact window behavior
 
-자동 시작은 현재 사용자 HKCU Run 항목을 사용합니다.
+Color Tools automatically adjusts its height to the amount of content.
 
-## 빌드
+- Empty Recent/Favorites rows are not reserved.
+- Favorites are hidden when there are none.
+- Adding the first favorite expands the window automatically.
+- Removing the last favorite shrinks it again.
+- Clearing recent colors removes unused rows immediately.
 
-요구 사항:
+The width is kept large enough to display color codes without making the window unnecessarily wide.
+
+## WCAG contrast
+
+Color Tools shows contrast ratios between the current color and white/black.
+
+This is useful when checking text/background combinations for accessibility.
+
+## Tray settings
+
+The tray menu provides:
+
+- **Pick color**
+- **Open Color Tools**
+- Zoom level
+- Average area
+- Copy format
+- Global hotkey
+- **Always open Color Tools after picking**
+- **Start with Windows**
+- Theme: System / Light / Dark
+- Language: Korean / English
+- Exit
+
+Default global hotkey: **Ctrl+Alt+C**
+
+Alternative presets are available if that shortcut conflicts with another application.
+
+## Custom copy template
+
+Open:
+
+**Tray → Copy format → Edit custom template**
+
+Default template:
+
+```text
+{hex} / {rgb} / {rgba}
+```
+
+Whole-format placeholders:
+
+```text
+{hex} {rgb} {rgba} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}
+```
+
+Component placeholders:
+
+```text
+{r} {g} {b}
+{hsl_h} {hsl_s} {hsl_l}
+{hsv_h} {hsv_s} {hsv_v}
+{hwb_h} {hwb_w} {hwb_b}
+{cmyk_c} {cmyk_m} {cmyk_y} {cmyk_k}
+{lab_l} {lab_a} {lab_b}
+{oklch_l} {oklch_c} {oklch_h}
+```
+
+## Settings and data
+
+Settings are stored in:
+
+```text
+%LOCALAPPDATA%\DKColorPicker\settings.ini
+```
+
+Recent colors and Favorites are stored in:
+
+```text
+%LOCALAPPDATA%\DKColorPicker\colors.ini
+```
+
+Windows startup uses the current user's `HKCU\...\Run` entry, so administrator rights are not required.
+
+Optional external localization overrides can be placed next to the EXE:
+
+```text
+locales\ko.ini
+locales\en.ini
+```
+
+The app works normally without these files because Korean and English are built in.
+
+## Troubleshooting
+
+### Ctrl+Alt+C does not work
+
+Another application may already be using the shortcut.
+
+Open the tray menu and choose another global hotkey preset.
+
+### I closed the window but the app is still running
+
+This is expected. Closing Color Tools hides the window while DK Color Picker remains in the tray.
+
+Use **Tray → Exit** to quit completely.
+
+### Windows startup stopped working after I moved the EXE
+
+The startup entry stores the current EXE path.
+
+Turn **Start with Windows** off and on again after moving the program.
+
+## Build from source
+
+Requirements:
 
 - Windows 10/11 x64
-- Visual Studio 2022 Build Tools 또는 그 이상
-- CMake 3.23 이상
+- Visual Studio 2022 Build Tools or newer
+- CMake 3.23 or newer
 
-PowerShell:
+Build:
 
-    cmake -S . -B build -A x64
-    cmake --build build --config Release
+```powershell
+cmake -S . -B build -A x64
+cmake --build build --config Release
+```
 
-결과 파일:
+Output:
 
-    build\Release\DKColorPicker.exe
+```text
+build\Release\DKColorPicker.exe
+```
 
-## 배포 패키징
+Create a release ZIP locally:
 
-일반 빌드 산출물은 여전히 단독 실행 가능한 \`DKColorPicker.exe\`입니다.
+```powershell
+./tools/package.ps1 -ExePath build/Release/DKColorPicker.exe
+```
 
-배포 ZIP을 만들려면:
+Measure startup and memory usage:
 
-    ./tools/package.ps1 -ExePath build/Release/DKColorPicker.exe
+```powershell
+./tools/measure.ps1 -ExePath build/Release/DKColorPicker.exe -Samples 5
+```
 
-생성물:
+Development status and follow-up work are tracked in [ROADMAP.md](ROADMAP.md).
 
-    dist\DKColorPicker-win-x64.zip
+## Project notes
 
-\`v*\` 태그를 푸시하면 GitHub Actions의 Release workflow가 Windows x64 빌드와 패키징 후 GitHub Release를 생성하도록 구성되어 있습니다.
+DK Color Picker is an independent MIT-licensed implementation. It does not use the source code, assets, icons, or UI files of ColorPick or other color-picker applications.
 
-## 시작 시간 / 메모리 측정
+## License
 
-실제 Windows 데스크톱 세션에서 다음 스크립트로 반복 측정할 수 있습니다.
-
-    ./tools/measure.ps1 -ExePath build/Release/DKColorPicker.exe -Samples 5
-
-출력:
-
-- 프로세스 시작 후 GUI 입력 대기 상태까지의 시간
-- Working Set
-- Private Memory
-- EXE 파일 크기
-- 지정 횟수 평균
-
-CI의 비대화된 가상 머신 수치는 실제 사용자 PC와 성격이 달라 자동 성능 기준으로 사용하지 않고, 로컬 측정 스크립트를 기준으로 남겼습니다.
-
-## 개발 상태
-
-T01~T06의 초기 제품 범위를 구현했습니다. 세부 상태와 후속 개선 항목은 ROADMAP.md를 확인하세요.
-
-기능 동작의 참고 대상은 공개된 ColorPick 설명이지만, 본 프로젝트는 별도의 독립 구현이며 원 프로그램과 제휴 또는 연관되어 있지 않습니다.
-
-## 라이선스
-
-MIT License. 자세한 내용은 LICENSE를 확인하세요.
+[MIT License](LICENSE)
