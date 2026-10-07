@@ -40,6 +40,7 @@ struct UtilityState {
     CopyColorCallback onCopyColor = nullptr;
     CopyTextCallback onCopyText = nullptr;
     CopyFormatChangedCallback onCopyFormatChanged = nullptr;
+    RecentColorsChangedCallback onRecentColorsChanged = nullptr;
 
     HBRUSH backgroundBrush = nullptr;
     HBRUSH controlBrush = nullptr;
@@ -995,6 +996,11 @@ LRESULT CALLBACK UtilityProc(
             HIWORD(wParam) == BN_CLICKED) {
             dkcolorlib::ClearRecentColors();
             RefreshLibraryState(state);
+
+            if (state->onRecentColorsChanged != nullptr) {
+                state->onRecentColorsChanged();
+            }
+
             ResizeUtilityToContent(hwnd, state);
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
@@ -1149,7 +1155,8 @@ HWND CreateUtilityWindow(
     dktheme::ThemeMode theme,
     CopyColorCallback onCopyColor,
     CopyTextCallback onCopyText,
-    CopyFormatChangedCallback onCopyFormatChanged) {
+    CopyFormatChangedCallback onCopyFormatChanged,
+    RecentColorsChangedCallback onRecentColorsChanged) {
     auto* state = new UtilityState();
     state->color = color;
     state->copyFormat = copyFormat;
@@ -1158,6 +1165,7 @@ HWND CreateUtilityWindow(
     state->onCopyColor = onCopyColor;
     state->onCopyText = onCopyText;
     state->onCopyFormatChanged = onCopyFormatChanged;
+    state->onRecentColorsChanged = onRecentColorsChanged;
 
     HWND window = CreateWindowExW(
         WS_EX_APPWINDOW,
