@@ -2,8 +2,9 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -16,6 +17,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Resolve version
+        id: version
+        shell: pwsh
+        run: |
+          $content = Get-Content CMakeLists.txt -Raw
+          if ($content -notmatch 'project\(DKColorPicker VERSION ([0-9]+\.[0-9]+\.[0-9]+)') {
+            throw "Could not resolve project version from CMakeLists.txt"
+          }
+          "tag=v$($Matches[1])" >> $env:GITHUB_OUTPUT
+
       - name: Configure
         run: cmake -S . -B build -A x64
 
@@ -26,8 +37,20 @@ jobs:
         shell: pwsh
         run: ./tools/package.ps1 -ExePath build/Release/DKColorPicker.exe
 
-      - name: Create GitHub release
+      - name: Create release when version is new
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ github.ref_name }}" "dist/DKColorPicker-win-x64.zip" --generate-notes
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release view "$env:RELEASE_TAG" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $env:RELEASE_TAG already exists; skipping."
+            exit 0
+          }
+
+          gh release create "$env:RELEASE_TAG" `
+            "dist/DKColorPicker-win-x64.zip" `
+            --target "${{ github.sha }}" `
+            --title "DK Color Picker $env:RELEASE_TAG" `
+            --generate-notes
