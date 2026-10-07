@@ -268,11 +268,17 @@ bool PointInside(const RECT& rect, POINT point) {
 }
 
 RECT StarRect(HWND hwnd, const RECT& rect) {
-    const int size = std::min(
-        Scale(hwnd, 22),
-        std::max(
-            Scale(hwnd, 16),
-            rect.bottom - rect.top - Scale(hwnd, 4)));
+    const int minSize = Scale(hwnd, 16);
+    const int maxSize = Scale(hwnd, 22);
+    int size =
+        static_cast<int>(rect.bottom - rect.top) - Scale(hwnd, 4);
+
+    if (size < minSize) {
+        size = minSize;
+    }
+    if (size > maxSize) {
+        size = maxSize;
+    }
 
     return {
         rect.right - size - Scale(hwnd, 2),
