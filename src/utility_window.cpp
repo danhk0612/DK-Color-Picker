@@ -22,6 +22,10 @@ constexpr wchar_t kUtilityClass[] = L"DKColorPicker.UtilityWindow";
 constexpr int kClearRecentId = 3004;
 constexpr int kFormatRadioBaseId = 3020;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
+constexpr int kClientWidth = 720;
+constexpr int kMargin = 14;
+constexpr int kLibraryColumns = 5;
+constexpr int kLibraryRowHeight = 40;
 
 struct UtilityState {
     std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
@@ -213,13 +217,115 @@ void ApplyTheme(HWND hwnd, UtilityState* state) {
     }
 }
 
+int LibraryRows(std::size_t count) {
+    if (count == 0) {
+        return 0;
+    }
+    return static_cast<int>(
+        (count + kLibraryColumns - 1) / kLibraryColumns);
+}
+
+struct CompactLayout {
+    int recentTitleY = 0;
+    int recentTop = 0;
+    int favoritesTitleY = 0;
+    int favoritesTop = 0;
+    int clientHeight = 0;
+};
+
+CompactLayout CalculateCompactLayout(
+    HWND hwnd,
+    const UtilityState* state) {
+    CompactLayout layout{};
+
+    const int top = Scale(hwnd, 44);
+    const int cardHeight = Scale(hwnd, 86);
+    const int toneTitleY = top + cardHeight + Scale(hwnd, 10);
+    const int toneTop = toneTitleY + Scale(hwnd, 20);
+    const int toneBottom = toneTop + Scale(hwnd, 38);
+
+    const int harmonyTitleY = toneBottom + Scale(hwnd, 10);
+    const int harmonyTop = harmonyTitleY + Scale(hwnd, 20);
+    const int harmonyBottom = harmonyTop + Scale(hwnd, 38);
+
+    const int contrastY = harmonyBottom + Scale(hwnd, 10);
+    layout.recentTitleY = contrastY + Scale(hwnd, 32);
+    layout.recentTop = layout.recentTitleY + Scale(hwnd, 22);
+
+    const int recentRows =
+        state == nullptr ? 0 : LibraryRows(state->recentColors.size());
+    const int recentBottom =
+        layout.recentTop +
+        recentRows * Scale(hwnd, kLibraryRowHeight);
+
+    if (state != nullptr && !state->favoriteColors.empty()) {
+        layout.favoritesTitleY = recentBottom + Scale(hwnd, 10);
+        layout.favoritesTop =
+            layout.favoritesTitleY + Scale(hwnd, 22);
+
+        const int favoriteRows =
+            LibraryRows(state->favoriteColors.size());
+        layout.clientHeight =
+            layout.favoritesTop +
+            favoriteRows * Scale(hwnd, kLibraryRowHeight) +
+            Scale(hwnd, 14);
+    } else {
+        layout.clientHeight =
+            recentBottom + Scale(hwnd, 14);
+    }
+
+    const int minimumHeight = Scale(hwnd, 360);
+    if (layout.clientHeight < minimumHeight) {
+        layout.clientHeight = minimumHeight;
+    }
+
+    return layout;
+}
+
+void ResizeUtilityToContent(HWND hwnd, UtilityState* state) {
+    if (hwnd == nullptr || state == nullptr) {
+        return;
+    }
+
+    const CompactLayout layout =
+        CalculateCompactLayout(hwnd, state);
+    const UINT dpi = GetDpiForWindow(hwnd);
+
+    RECT rect{
+        0,
+        0,
+        Scale(hwnd, kClientWidth),
+        layout.clientHeight};
+
+    const DWORD style =
+        static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
+    const DWORD exStyle =
+        static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+
+    AdjustWindowRectExForDpi(
+        &rect,
+        style,
+        FALSE,
+        exStyle,
+        dpi);
+
+    SetWindowPos(
+        hwnd,
+        nullptr,
+        0,
+        0,
+        rect.right - rect.left,
+        rect.bottom - rect.top,
+        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+}
+
 void LayoutControls(HWND hwnd, UtilityState* state) {
     if (state == nullptr) {
         return;
     }
 
-    const int margin = Scale(hwnd, 20);
-    const int formatY = Scale(hwnd, 14);
+    const int margin = Scale(hwnd, kMargin);
+    const int formatY = Scale(hwnd, 10);
 
     const std::array<int, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
         formatWidths{54, 54, 54, 54, 58, 62, 68, 68, 108};
@@ -232,18 +338,26 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
             formatX,
             formatY,
             width,
-            Scale(hwnd, 24),
+            Scale(hwnd, 22),
             TRUE);
-        formatX += width + Scale(hwnd, 4);
+        formatX += width + Scale(hwnd, 3);
     }
 
+    const CompactLayout layout =
+        CalculateCompactLayout(hwnd, state);
+
+    const int clearWidth = Scale(hwnd, 116);
     MoveWindow(
         state->clearRecent,
-        Scale(hwnd, 600),
-        Scale(hwnd, 374),
-        Scale(hwnd, 140),
-        Scale(hwnd, 28),
+        Scale(hwnd, kClientWidth) - margin - clearWidth,
+        layout.recentTitleY - Scale(hwnd, 2),
+        clearWidth,
+        Scale(hwnd, 24),
         TRUE);
+
+    EnableWindow(
+        state->clearRecent,
+        state->recentColors.empty() ? FALSE : TRUE);
 }
 
 void SetColorInternal(
