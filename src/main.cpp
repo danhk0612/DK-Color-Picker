@@ -702,6 +702,14 @@ void OnUtilityCopyFormatChanged(dkcolor::CopyFormat format) {
     SaveSettings();
 }
 
+void OnUtilityCopyColor(COLORREF color) {
+    const std::wstring text = dkcolor::FormatColor(
+        color,
+        CurrentCopyFormat(),
+        g_settings.customTemplate);
+    CopyTextToClipboard(g_messageWindow, text);
+}
+
 dktheme::ThemeMode CurrentThemeMode() {
     const int value = g_settings.themeMode;
     if (value < static_cast<int>(dktheme::ThemeMode::System) ||
@@ -733,6 +741,7 @@ void OpenUtilityWindow() {
             CurrentCopyFormat(),
             CurrentThemeMode(),
             OnUtilityColorChanged,
+            OnUtilityCopyColor,
             OnUtilityCopyFormatChanged);
     }
 
