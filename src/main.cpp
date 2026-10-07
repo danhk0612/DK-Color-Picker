@@ -693,15 +693,15 @@ void SetAverageSize(HWND hwnd, int averageSize) {
 
 dkcolor::CopyFormat CurrentCopyFormat();
 
-void OnUtilityColorChanged(COLORREF color) {
-    g_currentColor = color;
-}
-
 void OnUtilityCopyColor(COLORREF color) {
     const std::wstring text = dkcolor::FormatColor(
         color,
         CurrentCopyFormat(),
         g_settings.customTemplate);
+    CopyTextToClipboard(g_messageWindow, text);
+}
+
+void OnUtilityCopyText(const std::wstring& text) {
     CopyTextToClipboard(g_messageWindow, text);
 }
 
@@ -742,8 +742,8 @@ void OpenUtilityWindow() {
             CurrentCopyFormat(),
             g_settings.customTemplate,
             CurrentThemeMode(),
-            OnUtilityColorChanged,
             OnUtilityCopyColor,
+            OnUtilityCopyText,
             OnUtilityCopyFormatChanged);
     }
 
