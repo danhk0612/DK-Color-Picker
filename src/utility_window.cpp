@@ -295,11 +295,9 @@ void FlashRect(HWND hwnd, UtilityState* state, const RECT& rect) {
     state->feedbackRect = rect;
     state->feedbackActive = true;
 
-    RECT dirty = rect;
-    InflateRect(&dirty, Scale(hwnd, 4), Scale(hwnd, 4));
-    InvalidateRect(hwnd, &dirty, FALSE);
-
     KillTimer(hwnd, kSwatchFeedbackTimerId);
+    InvalidateRect(hwnd, nullptr, TRUE);
+    UpdateWindow(hwnd);
     SetTimer(hwnd, kSwatchFeedbackTimerId, 160, nullptr);
 }
 
@@ -496,39 +494,17 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     const dkcolor::CssNamedColor nearest =
         dkcolor::NearestCssNamedColor(state->color);
 
-    const std::wstring currentCodeLabel =
-        dkl10n::Text(L"tools.current_code");
     const std::wstring nearestLabel =
         dkl10n::Text(L"tools.nearest_css");
 
-    RECT currentCodeRect{
-        textLeft,
-        top,
-        Scale(hwnd, 740),
-        top + rowHeight};
-
-    SetTextColor(hdc, dktheme::TextColor(state->theme));
-    const std::wstring currentCodeText =
-        currentCodeLabel + L": " + DisplayCode(state, state->color);
-
-    DrawTextW(
-        hdc,
-        currentCodeText.c_str(),
-        -1,
-        &currentCodeRect,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-
     state->cssNameRect = {
         textLeft,
-        top + rowHeight,
+        top + Scale(hwnd, 28),
         Scale(hwnd, 740),
-        top + rowHeight * 2};
+        top + Scale(hwnd, 58)};
 
     const std::wstring cssText =
-        nearestLabel + L": " +
-        std::wstring(nearest.name) +
-        L"  " +
-        DisplayCode(state, nearest.color);
+        nearestLabel + L": " + std::wstring(nearest.name);
 
     SetTextColor(hdc, GetSysColor(COLOR_HIGHLIGHT));
     DrawTextW(
@@ -742,22 +718,6 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         state->favoriteRects.data(),
         state->favoriteRects.size(),
         favoritesTop);
-
-    RECT hintRect{
-        margin,
-        favoritesTop + recentRows * libraryRowHeight + Scale(hwnd, 10),
-        Scale(hwnd, 740),
-        favoritesTop + recentRows * libraryRowHeight + Scale(hwnd, 34)};
-
-    SetTextColor(hdc, dktheme::MutedTextColor(state->theme));
-    const std::wstring hintText = dkl10n::Text(L"tools.star_hint");
-
-    DrawTextW(
-        hdc,
-        hintText.c_str(),
-        -1,
-        &hintRect,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     DrawFeedback(hwnd, state, hdc);
 
@@ -1006,9 +966,8 @@ LRESULT CALLBACK UtilityProc(
             KillTimer(hwnd, kSwatchFeedbackTimerId);
             state->feedbackActive = false;
 
-            RECT dirty = state->feedbackRect;
-            InflateRect(&dirty, Scale(hwnd, 4), Scale(hwnd, 4));
-            InvalidateRect(hwnd, &dirty, FALSE);
+            InvalidateRect(hwnd, nullptr, TRUE);
+            UpdateWindow(hwnd);
             return 0;
         }
         break;
