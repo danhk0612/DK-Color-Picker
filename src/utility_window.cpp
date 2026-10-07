@@ -1016,7 +1016,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
         return 0;
     }
 
-    case WM_COMMAND:
+    case WM_COMMAND: {
         if (state == nullptr) {
             break;
         }
@@ -1090,6 +1090,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             break;
         }
         break;
+    }
 
     case WM_LBUTTONDOWN:
         if (state != nullptr) {
