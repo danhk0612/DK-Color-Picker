@@ -9,8 +9,8 @@
 
 namespace dkcolorui {
 
-using ColorChangedCallback = void (*)(COLORREF color);
 using CopyColorCallback = void (*)(COLORREF color);
+using CopyTextCallback = void (*)(const std::wstring& text);
 using CopyFormatChangedCallback = void (*)(dkcolor::CopyFormat format);
 
 bool RegisterUtilityWindowClass(HINSTANCE instance);
@@ -22,8 +22,8 @@ HWND CreateUtilityWindow(
     dkcolor::CopyFormat copyFormat,
     const std::wstring& customTemplate,
     dktheme::ThemeMode theme,
-    ColorChangedCallback onColorChanged,
     CopyColorCallback onCopyColor,
+    CopyTextCallback onCopyText,
     CopyFormatChangedCallback onCopyFormatChanged);
 
 void ShowUtilityWindow(HWND hwnd, COLORREF color);
