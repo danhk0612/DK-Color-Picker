@@ -22,6 +22,7 @@ ColorPick과 같은 빠른 사용 흐름을 목표로 하지만, 기존 프로�
 - 복사 형식
   - HEX
   - RGB
+  - RGBA
   - HSL
   - HSV
   - HWB
@@ -80,7 +81,7 @@ ColorPick과 같은 빠른 사용 흐름을 목표로 하지만, 기존 프로�
 
 ### CSS 이름 근사
 
-CSS의 148개 named color를 CIELAB 공간에서 비교해 가장 가까운 이름과 실제 named color 값을 표시합니다. 색상 도구의 `CSS: 이름`을 클릭하면 CSS 색상 이름 자체가 클립보드에 복사됩니다.
+CSS의 148개 named color를 CIELAB 공간에서 비교해 가장 가까운 이름과 실제 named color 값을 표시합니다. 색상 도구의 `유사 CSS 코드: 이름`을 클릭하면 CSS 색상 이름 자체가 클립보드에 복사됩니다.
 
 ### 톤과 조화 배색
 
@@ -170,11 +171,11 @@ CSS의 148개 named color를 CIELAB 공간에서 비교해 가장 가까운 이�
 
 기본 템플릿:
 
-    {hex} / {rgb}
+    {hex} / {rgb} / {rgba}
 
 전체 형식 자리표시자:
 
-    {hex} {rgb} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}
+    {hex} {rgb} {rgba} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}
 
 구성요소 자리표시자:
 
