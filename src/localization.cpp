@@ -15,7 +15,7 @@ struct Entry {
     const wchar_t* en;
 };
 
-constexpr std::array<Entry, 52> kEntries{{
+constexpr std::array<Entry, 53> kEntries{{
     {L"app.title", L"DK Color Picker", L"DK Color Picker"},
     {L"tray.pick", L"색 추출", L"Pick color"},
     {L"tray.tools", L"색상 도구 열기", L"Open color tools"},
@@ -40,17 +40,18 @@ constexpr std::array<Entry, 52> kEntries{{
     {L"tools.apply", L"색상 변경", L"Set color"},
     {L"tools.active_format", L"복사 형식", L"Copy format"},
     {L"tools.current_code", L"현재 코드", L"Current code"},
+    {L"tools.star_hint", L"색상 상자 클릭: 복사 · ☆/★ 클릭: 즐겨찾기", L"Click color: copy · click ☆/★: favorite"},
     {L"tools.favorite_add", L"즐겨찾기 추가", L"Add favorite"},
     {L"tools.favorite_remove", L"즐겨찾기 제거", L"Remove favorite"},
     {L"tools.clear_recent", L"최근 목록 비우기", L"Clear recent"},
     {L"tools.copy_format", L"복사 형식", L"Copy format"},
     {L"tools.tones", L"톤 단계 — 클릭하여 색상 코드 복사", L"Tone steps — click to copy color code"},
     {L"tools.harmony", L"조화 배색 — 클릭하여 색상 코드 복사 · 보색 / 유사색 -30° / 유사색 +30° / 삼각 -120° / 삼각 +120°", L"Harmony — click to copy · complementary / analogous -30° / +30° / triadic -120° / +120°"},
-    {L"tools.recent", L"최근 색상 — 최대 20개, 클릭하여 적용", L"Recent colors — up to 20, click to apply"},
-    {L"tools.favorites", L"즐겨찾기 — 최대 20개, 클릭하여 적용", L"Favorites — up to 20, click to apply"},
+    {L"tools.recent", L"최근 색상 — 최대 20개, 클릭하여 복사", L"Recent colors — up to 20, click to copy"},
+    {L"tools.favorites", L"즐겨찾기 — 최대 20개, 클릭하여 복사", L"Favorites — up to 20, click to copy"},
     {L"tools.export", L"즐겨찾기 내보내기:", L"Export favorites:"},
     {L"tools.help", L"내보내기 대상은 즐겨찾기입니다. 창의 X 버튼은 트레이로 숨깁니다.", L"Exports use favorites. Closing this window hides it to the tray."},
-    {L"tools.nearest_css", L"가장 가까운 CSS 색상", L"Nearest CSS color"},
+    {L"tools.nearest_css", L"가장 가까운 CSS 색상 (클릭해 이름 복사)", L"Nearest CSS color (click to copy name)"},
     {L"tools.contrast", L"WCAG 대비", L"WCAG contrast"},
     {L"dialog.invalid_color", L"색상 형식을 확인해주세요.\n#RGB, #RRGGBB, rgb(r,g,b), CSS 색상 이름을 사용할 수 있습니다.", L"Check the color format.\nSupported: #RGB, #RRGGBB, rgb(r,g,b), and CSS color names."},
     {L"dialog.no_favorites", L"내보낼 즐겨찾기 색상이 없습니다.", L"There are no favorite colors to export."},
