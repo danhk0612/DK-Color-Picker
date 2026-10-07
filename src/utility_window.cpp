@@ -533,19 +533,19 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     const int tonesTitleY = top + cardHeight + Scale(hwnd, 15);
-    RECT tonesTitle{
+    RECT tonesTitleRect{
         margin,
         tonesTitleY,
         Scale(hwnd, 740),
         tonesTitleY + rowHeight};
 
     SetTextColor(hdc, dktheme::TextColor(state->theme));
-    const std::wstring tonesTitle = dkl10n::Text(L"tools.tones");
+    const std::wstring tonesTitleText = dkl10n::Text(L"tools.tones");
     DrawTextW(
         hdc,
-        tonesTitle.c_str(),
+        tonesTitleText.c_str(),
         -1,
-        &tonesTitle,
+        &tonesTitleRect,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
     state->tones = dkcolor::ToneSteps(state->color);
