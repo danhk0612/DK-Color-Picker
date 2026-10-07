@@ -1,12 +1,13 @@
 #include "utility_window.h"
 
 #include <windowsx.h>
+
 #include "color_formats.h"
 #include "color_library.h"
 #include "color_tools.h"
 #include "localization.h"
-#include "theme.h"
 #include "resource.h"
+#include "theme.h"
 
 #include <algorithm>
 #include <array>
@@ -23,7 +24,39 @@ constexpr int kFormatRadioBaseId = 3020;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
 
 struct UtilityState {
-    std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)> formatRadios{};
+    std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
+        formatRadios{};
+    HWND clearRecent = nullptr;
+
+    COLORREF color = RGB(59, 130, 246);
+    dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
+    std::wstring customTemplate = dkcolor::DefaultCustomTemplate();
+    dktheme::ThemeMode theme = dktheme::ThemeMode::System;
+
+    CopyColorCallback onCopyColor = nullptr;
+    CopyTextCallback onCopyText = nullptr;
+    CopyFormatChangedCallback onCopyFormatChanged = nullptr;
+
+    HBRUSH backgroundBrush = nullptr;
+    HBRUSH controlBrush = nullptr;
+
+    RECT currentRect{};
+    RECT cssNameRect{};
+
+    std::array<RECT, 5> toneRects{};
+    std::array<RECT, 5> harmonyRects{};
+    std::array<COLORREF, 5> tones{};
+    std::array<COLORREF, 5> harmonies{};
+
+    std::array<RECT, dkcolorlib::kMaxRecentColors> recentRects{};
+    std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
+    std::vector<COLORREF> recentColors;
+    std::vector<COLORREF> favoriteColors;
+
+    RECT feedbackRect{};
+    bool feedbackActive = false;
+};
+
 int Scale(HWND hwnd, int value) {
     return MulDiv(value, static_cast<int>(GetDpiForWindow(hwnd)), 96);
 }
@@ -51,7 +84,9 @@ std::wstring CopyFormatDisplayName(dkcolor::CopyFormat format) {
 }
 
 std::wstring ContrastGrade(double ratio) {
-    const bool english = dkl10n::GetLanguage() == dkl10n::Language::English;
+    const bool english =
+        dkl10n::GetLanguage() == dkl10n::Language::English;
+
     if (ratio >= 7.0) {
         return english
             ? L"AA/AAA normal & large pass"
@@ -74,6 +109,7 @@ void DeleteThemeBrushes(UtilityState* state) {
     if (state == nullptr) {
         return;
     }
+
     if (state->backgroundBrush != nullptr) {
         DeleteObject(state->backgroundBrush);
         state->backgroundBrush = nullptr;
@@ -88,6 +124,7 @@ void RecreateThemeBrushes(UtilityState* state) {
     if (state == nullptr) {
         return;
     }
+
     DeleteThemeBrushes(state);
     state->backgroundBrush = CreateSolidBrush(
         dktheme::BackgroundColor(state->theme));
@@ -105,7 +142,27 @@ void SetControlFont(HWND control, HFONT font) {
     }
 }
 
-void RefreshFormatRadios(UtilityState* state) {
+void RefreshLibraryState(UtilityState* state) {
+    if (state == nullptr) {
+        return;
+    }
+
+    state->recentColors = dkcolorlib::LoadRecentColors();
+    state->favoriteColors = dkcolorlib::LoadFavoriteColors();
+}
+
+bool IsFavoriteInState(const UtilityState* state, COLORREF color) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    return std::find(
+        state->favoriteColors.begin(),
+        state->favoriteColors.end(),
+        color) != state->favoriteColors.end();
+}
+
+void RefreshFormatRadios(HWND hwnd, UtilityState* state) {
     if (state == nullptr) {
         return;
     }
@@ -122,7 +179,7 @@ void RefreshFormatRadios(UtilityState* state) {
     }
 
     CheckRadioButton(
-        GetParent(state->clearRecent),
+        hwnd,
         kFormatRadioBaseId,
         kFormatRadioBaseId +
             static_cast<int>(dkcolor::CopyFormat::Count) - 1,
@@ -139,7 +196,7 @@ void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
 
     SetWindowTextW(hwnd, title.c_str());
     SetWindowTextW(state->clearRecent, clear.c_str());
-    RefreshFormatRadios(state);
+    RefreshFormatRadios(hwnd, state);
 }
 
 void ApplyTheme(HWND hwnd, UtilityState* state) {
@@ -164,8 +221,8 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
     const int margin = Scale(hwnd, 20);
     const int formatY = Scale(hwnd, 14);
 
-    const std::array<int, static_cast<std::size_t>(dkcolor::CopyFormat::Count)> formatWidths{
-        54, 54, 54, 54, 58, 62, 68, 68, 108};
+    const std::array<int, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
+        formatWidths{54, 54, 54, 54, 58, 62, 68, 68, 108};
 
     int formatX = margin;
     for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
@@ -182,20 +239,11 @@ void LayoutControls(HWND hwnd, UtilityState* state) {
 
     MoveWindow(
         state->clearRecent,
-        margin,
-        Scale(hwnd, 620),
-        Scale(hwnd, 120),
+        Scale(hwnd, 600),
+        Scale(hwnd, 374),
+        Scale(hwnd, 140),
         Scale(hwnd, 28),
         TRUE);
-}
-
-void RefreshLibraryState(UtilityState* state) {
-    if (state == nullptr) {
-        return;
-    }
-
-    state->recentColors = dkcolorlib::LoadRecentColors();
-    state->favoriteColors = dkcolorlib::LoadFavoriteColors();
 }
 
 void SetColorInternal(
@@ -219,21 +267,12 @@ bool PointInside(const RECT& rect, POINT point) {
         point.y < rect.bottom;
 }
 
-bool IsFavoriteInState(const UtilityState* state, COLORREF color) {
-    if (state == nullptr) {
-        return false;
-    }
-
-    return std::find(
-        state->favoriteColors.begin(),
-        state->favoriteColors.end(),
-        color) != state->favoriteColors.end();
-}
-
 RECT StarRect(HWND hwnd, const RECT& rect) {
     const int size = std::min(
         Scale(hwnd, 22),
-        std::max(Scale(hwnd, 16), rect.bottom - rect.top - Scale(hwnd, 4)));
+        std::max(
+            Scale(hwnd, 16),
+            rect.bottom - rect.top - Scale(hwnd, 4)));
 
     return {
         rect.right - size - Scale(hwnd, 2),
@@ -242,7 +281,7 @@ RECT StarRect(HWND hwnd, const RECT& rect) {
         rect.top + Scale(hwnd, 2) + size};
 }
 
-void FlashSwatch(HWND hwnd, UtilityState* state, const RECT& rect) {
+void FlashRect(HWND hwnd, UtilityState* state, const RECT& rect) {
     if (state == nullptr) {
         return;
     }
@@ -258,7 +297,7 @@ void FlashSwatch(HWND hwnd, UtilityState* state, const RECT& rect) {
     SetTimer(hwnd, kSwatchFeedbackTimerId, 160, nullptr);
 }
 
-void DrawSwatchFeedback(HWND hwnd, UtilityState* state, HDC hdc) {
+void DrawFeedback(HWND hwnd, UtilityState* state, HDC hdc) {
     if (state == nullptr || !state->feedbackActive) {
         return;
     }
@@ -280,9 +319,14 @@ void DrawSwatchFeedback(HWND hwnd, UtilityState* state, HDC hdc) {
 }
 
 COLORREF BestTextColor(COLORREF background) {
-    const double blackRatio = dkcolor::ContrastRatio(background, RGB(0, 0, 0));
-    const double whiteRatio = dkcolor::ContrastRatio(background, RGB(255, 255, 255));
-    return blackRatio >= whiteRatio ? RGB(0, 0, 0) : RGB(255, 255, 255);
+    const double blackRatio =
+        dkcolor::ContrastRatio(background, RGB(0, 0, 0));
+    const double whiteRatio =
+        dkcolor::ContrastRatio(background, RGB(255, 255, 255));
+
+    return blackRatio >= whiteRatio
+        ? RGB(0, 0, 0)
+        : RGB(255, 255, 255);
 }
 
 void DrawSwatch(
@@ -293,7 +337,7 @@ void DrawSwatch(
     const std::wstring& label,
     HFONT font,
     bool favorite,
-    bool compact = false) {
+    bool compact) {
     HBRUSH brush = CreateSolidBrush(color);
     FillRect(hdc, &rect, brush);
     DeleteObject(brush);
@@ -308,12 +352,13 @@ void DrawSwatch(
 
     HGDIOBJ oldFont = SelectObject(hdc, font);
     const int oldBkMode = SetBkMode(hdc, TRANSPARENT);
-    const COLORREF textColor = BestTextColor(color);
-    const COLORREF oldTextColor = SetTextColor(hdc, textColor);
+    const COLORREF oldTextColor =
+        SetTextColor(hdc, BestTextColor(color));
 
     RECT textRect = rect;
     textRect.left += Scale(hwnd, 4);
-    textRect.right -= Scale(hwnd, 24);
+    textRect.right -= Scale(hwnd, 25);
+
     DrawTextW(
         hdc,
         label.c_str(),
@@ -322,12 +367,12 @@ void DrawSwatch(
         DT_CENTER | DT_VCENTER | DT_SINGLELINE |
             (compact ? DT_END_ELLIPSIS : 0));
 
-    RECT starRect = StarRect(hwnd, rect);
+    RECT star = StarRect(hwnd, rect);
     DrawTextW(
         hdc,
         favorite ? L"★" : L"☆",
         -1,
-        &starRect,
+        &star,
         DT_CENTER | DT_VCENTER | DT_SINGLELINE);
 
     SetTextColor(hdc, oldTextColor);
@@ -335,7 +380,7 @@ void DrawSwatch(
     SelectObject(hdc, oldFont);
 }
 
-bool HandleColorSwatchClick(
+bool HandleColorClick(
     HWND hwnd,
     UtilityState* state,
     POINT point,
@@ -345,7 +390,7 @@ bool HandleColorSwatchClick(
         return false;
     }
 
-    FlashSwatch(hwnd, state, rect);
+    FlashRect(hwnd, state, rect);
 
     if (PointInside(StarRect(hwnd, rect), point)) {
         dkcolorlib::ToggleFavoriteColor(color);
@@ -372,10 +417,10 @@ void DrawLibrarySwatches(
     const int margin = Scale(hwnd, 20);
     const int gap = Scale(hwnd, 6);
     const int usableWidth = Scale(hwnd, 720);
-    constexpr int columns = 10;
+    constexpr int columns = 5;
     const int swatchWidth =
         (usableWidth - gap * (columns - 1)) / columns;
-    const int swatchHeight = Scale(hwnd, 38);
+    const int swatchHeight = Scale(hwnd, 40);
     const int rowGap = Scale(hwnd, 6);
 
     for (std::size_t index = 0; index < rectCount; ++index) {
@@ -387,12 +432,15 @@ void DrawLibrarySwatches(
          ++index) {
         const int column = static_cast<int>(index % columns);
         const int row = static_cast<int>(index / columns);
+
         RECT rect{
             margin + column * (swatchWidth + gap),
             top + row * (swatchHeight + rowGap),
             margin + column * (swatchWidth + gap) + swatchWidth,
             top + row * (swatchHeight + rowGap) + swatchHeight};
+
         rects[index] = rect;
+
         DrawSwatch(
             hwnd,
             hdc,
@@ -409,8 +457,6 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     if (state == nullptr) {
         return;
     }
-
-    RefreshLibraryState(state);
 
     const int margin = Scale(hwnd, 20);
     const int top = Scale(hwnd, 54);
@@ -454,9 +500,11 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         top,
         Scale(hwnd, 740),
         top + rowHeight};
+
     SetTextColor(hdc, dktheme::TextColor(state->theme));
     const std::wstring currentCodeText =
         currentCodeLabel + L": " + DisplayCode(state, state->color);
+
     DrawTextW(
         hdc,
         currentCodeText.c_str(),
@@ -469,11 +517,14 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         top + rowHeight,
         Scale(hwnd, 740),
         top + rowHeight * 2};
+
     const std::wstring cssText =
         nearestLabel + L": " +
         std::wstring(nearest.name) +
         L"  " +
         DisplayCode(state, nearest.color);
+
+    SetTextColor(hdc, GetSysColor(COLOR_HIGHLIGHT));
     DrawTextW(
         hdc,
         cssText.c_str(),
@@ -487,11 +538,12 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         tonesTitleY,
         Scale(hwnd, 740),
         tonesTitleY + rowHeight};
+
     SetTextColor(hdc, dktheme::TextColor(state->theme));
-    const std::wstring tonesTitleText = dkl10n::Text(L"tools.tones");
+    const std::wstring tonesTitle = dkl10n::Text(L"tools.tones");
     DrawTextW(
         hdc,
-        tonesTitleText.c_str(),
+        tonesTitle.c_str(),
         -1,
         &tonesTitle,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE);
@@ -501,16 +553,22 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     const int swatchTop = tonesTitleY + Scale(hwnd, 22);
     const int swatchGap = Scale(hwnd, 8);
     const int usableWidth = Scale(hwnd, 720);
-    const int smallSwatchWidth = (usableWidth - swatchGap * 4) / 5;
+    const int smallSwatchWidth =
+        (usableWidth - swatchGap * 4) / 5;
     const int smallSwatchHeight = Scale(hwnd, 46);
 
     for (std::size_t index = 0; index < state->tones.size(); ++index) {
         RECT rect{
-            margin + static_cast<int>(index) * (smallSwatchWidth + swatchGap),
+            margin + static_cast<int>(index) *
+                (smallSwatchWidth + swatchGap),
             swatchTop,
-            margin + static_cast<int>(index) * (smallSwatchWidth + swatchGap) + smallSwatchWidth,
+            margin + static_cast<int>(index) *
+                (smallSwatchWidth + swatchGap) +
+                smallSwatchWidth,
             swatchTop + smallSwatchHeight};
+
         state->toneRects[index] = rect;
+
         DrawSwatch(
             hwnd,
             hdc,
@@ -522,22 +580,29 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             true);
     }
 
-    const int harmonyTitleY = swatchTop + smallSwatchHeight + Scale(hwnd, 14);
-    RECT harmonyTitle{
+    const int harmonyTitleY =
+        swatchTop + smallSwatchHeight + Scale(hwnd, 14);
+
+    RECT harmonyTitleRect{
         margin,
         harmonyTitleY,
         Scale(hwnd, 740),
         harmonyTitleY + rowHeight};
+
     SetTextColor(hdc, dktheme::TextColor(state->theme));
-    const std::wstring harmonyTitleText = dkl10n::Text(L"tools.harmony");
+    const std::wstring harmonyTitle =
+        dkl10n::Text(L"tools.harmony");
+
     DrawTextW(
         hdc,
-        harmonyTitleText.c_str(),
+        harmonyTitle.c_str(),
         -1,
-        &harmonyTitle,
+        &harmonyTitleRect,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    const dkcolor::HarmonySet harmony = dkcolor::HarmonyColors(state->color);
+    const dkcolor::HarmonySet harmony =
+        dkcolor::HarmonyColors(state->color);
+
     state->harmonies = {
         harmony.complementary,
         harmony.analogousLeft,
@@ -547,13 +612,19 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     };
 
     const int harmonyTop = harmonyTitleY + Scale(hwnd, 22);
+
     for (std::size_t index = 0; index < state->harmonies.size(); ++index) {
         RECT rect{
-            margin + static_cast<int>(index) * (smallSwatchWidth + swatchGap),
+            margin + static_cast<int>(index) *
+                (smallSwatchWidth + swatchGap),
             harmonyTop,
-            margin + static_cast<int>(index) * (smallSwatchWidth + swatchGap) + smallSwatchWidth,
+            margin + static_cast<int>(index) *
+                (smallSwatchWidth + swatchGap) +
+                smallSwatchWidth,
             harmonyTop + smallSwatchHeight};
+
         state->harmonyRects[index] = rect;
+
         DrawSwatch(
             hwnd,
             hdc,
@@ -565,13 +636,17 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             true);
     }
 
-    const int contrastY = harmonyTop + smallSwatchHeight + Scale(hwnd, 14);
+    const int contrastY =
+        harmonyTop + smallSwatchHeight + Scale(hwnd, 14);
+
     const double whiteRatio =
         dkcolor::ContrastRatio(state->color, RGB(255, 255, 255));
     const double blackRatio =
         dkcolor::ContrastRatio(state->color, RGB(0, 0, 0));
 
-    const bool english = dkl10n::GetLanguage() == dkl10n::Language::English;
+    const bool english =
+        dkl10n::GetLanguage() == dkl10n::Language::English;
+
     wchar_t contrastText[420]{};
     swprintf_s(
         contrastText,
@@ -588,6 +663,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         contrastY,
         Scale(hwnd, 740),
         contrastY + Scale(hwnd, 36)};
+
     SetTextColor(hdc, dktheme::TextColor(state->theme));
     DrawTextW(
         hdc,
@@ -597,21 +673,25 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     const int recentTitleY = contrastY + Scale(hwnd, 38);
-    RECT recentTitle{
+    RECT recentTitleRect{
         margin,
         recentTitleY,
-        Scale(hwnd, 740),
+        Scale(hwnd, 580),
         recentTitleY + rowHeight};
-    const std::wstring recentTitleText = dkl10n::Text(L"tools.recent");
+
+    const std::wstring recentTitle =
+        dkl10n::Text(L"tools.recent");
+
     SetTextColor(hdc, dktheme::TextColor(state->theme));
     DrawTextW(
         hdc,
-        recentTitleText.c_str(),
+        recentTitle.c_str(),
         -1,
-        &recentTitle,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        &recentTitleRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    const int recentTop = recentTitleY + Scale(hwnd, 22);
+    const int recentTop = recentTitleY + Scale(hwnd, 24);
+
     DrawLibrarySwatches(
         hwnd,
         state,
@@ -622,22 +702,31 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         state->recentRects.size(),
         recentTop);
 
-    const int favoritesTitleY = recentTop + Scale(hwnd, 84) + Scale(hwnd, 12);
-    RECT favoritesTitle{
+    const int recentRows = 4;
+    const int libraryRowHeight = Scale(hwnd, 46);
+
+    const int favoritesTitleY =
+        recentTop + recentRows * libraryRowHeight + Scale(hwnd, 12);
+
+    RECT favoritesTitleRect{
         margin,
         favoritesTitleY,
         Scale(hwnd, 740),
         favoritesTitleY + rowHeight};
-    const std::wstring favoritesTitleText = dkl10n::Text(L"tools.favorites");
+
+    const std::wstring favoritesTitle =
+        dkl10n::Text(L"tools.favorites");
+
     SetTextColor(hdc, dktheme::TextColor(state->theme));
     DrawTextW(
         hdc,
-        favoritesTitleText.c_str(),
+        favoritesTitle.c_str(),
         -1,
-        &favoritesTitle,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        &favoritesTitleRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    const int favoritesTop = favoritesTitleY + Scale(hwnd, 22);
+    const int favoritesTop = favoritesTitleY + Scale(hwnd, 24);
+
     DrawLibrarySwatches(
         hwnd,
         state,
@@ -649,12 +738,14 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         favoritesTop);
 
     RECT hintRect{
-        margin + Scale(hwnd, 138),
-        Scale(hwnd, 620),
+        margin,
+        favoritesTop + recentRows * libraryRowHeight + Scale(hwnd, 10),
         Scale(hwnd, 740),
-        Scale(hwnd, 648)};
+        favoritesTop + recentRows * libraryRowHeight + Scale(hwnd, 34)};
+
     SetTextColor(hdc, dktheme::MutedTextColor(state->theme));
     const std::wstring hintText = dkl10n::Text(L"tools.star_hint");
+
     DrawTextW(
         hdc,
         hintText.c_str(),
@@ -662,29 +753,32 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         &hintRect,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    DrawSwatchFeedback(hwnd, state, hdc);
+    DrawFeedback(hwnd, state, hdc);
 
     SetTextColor(hdc, oldTextColor);
     SetBkMode(hdc, oldBkMode);
     SelectObject(hdc, oldFont);
 }
 
-void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
+bool HandleLibraryClick(
+    HWND hwnd,
+    UtilityState* state,
+    POINT point) {
     if (state == nullptr) {
-        return;
+        return false;
     }
 
     for (std::size_t index = 0;
          index < state->recentColors.size() &&
          index < state->recentRects.size();
          ++index) {
-        if (HandleColorSwatchClick(
+        if (HandleColorClick(
                 hwnd,
                 state,
                 point,
                 state->recentRects[index],
                 state->recentColors[index])) {
-            return;
+            return true;
         }
     }
 
@@ -692,23 +786,30 @@ void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
          index < state->favoriteColors.size() &&
          index < state->favoriteRects.size();
          ++index) {
-        if (HandleColorSwatchClick(
+        if (HandleColorClick(
                 hwnd,
                 state,
                 point,
                 state->favoriteRects[index],
                 state->favoriteColors[index])) {
-            return;
+            return true;
         }
     }
+
+    return false;
 }
 
-LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+LRESULT CALLBACK UtilityProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam) {
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
     if (message == WM_NCCREATE) {
-        const auto* create = reinterpret_cast<const CREATESTRUCTW*>(lParam);
+        const auto* create =
+            reinterpret_cast<const CREATESTRUCTW*>(lParam);
         state = static_cast<UtilityState*>(create->lpCreateParams);
         SetWindowLongPtrW(
             hwnd,
@@ -722,23 +823,34 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             return -1;
         }
 
-        HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+        HFONT font =
+            static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
 
-        for (std::size_t index = 0; index < state->formatRadios.size(); ++index) {
-            const DWORD groupStyle = index == 0 ? WS_GROUP : 0;
+        for (std::size_t index = 0;
+             index < state->formatRadios.size();
+             ++index) {
+            const DWORD groupStyle =
+                index == 0 ? WS_GROUP : 0;
+
             state->formatRadios[index] = CreateWindowExW(
                 0,
                 L"BUTTON",
                 L"",
                 WS_CHILD | WS_VISIBLE | WS_TABSTOP |
                     BS_AUTORADIOBUTTON | groupStyle,
-                0, 0, 0, 0,
+                0,
+                0,
+                0,
+                0,
                 hwnd,
                 reinterpret_cast<HMENU>(
                     static_cast<INT_PTR>(
-                        kFormatRadioBaseId + static_cast<int>(index))),
+                        kFormatRadioBaseId +
+                        static_cast<int>(index))),
                 GetModuleHandleW(nullptr),
                 nullptr);
+
+            SetControlFont(state->formatRadios[index], font);
         }
 
         state->clearRecent = CreateWindowExW(
@@ -746,7 +858,10 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             L"BUTTON",
             L"",
             WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-            0, 0, 0, 0,
+            0,
+            0,
+            0,
+            0,
             hwnd,
             reinterpret_cast<HMENU>(
                 static_cast<INT_PTR>(kClearRecentId)),
@@ -754,9 +869,6 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             nullptr);
 
         SetControlFont(state->clearRecent, font);
-        for (HWND radio : state->formatRadios) {
-            SetControlFont(radio, font);
-        }
 
         LayoutControls(hwnd, state);
         RefreshLibraryState(state);
@@ -770,7 +882,9 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
         return 0;
 
     case WM_DPICHANGED: {
-        const RECT* suggested = reinterpret_cast<const RECT*>(lParam);
+        const RECT* suggested =
+            reinterpret_cast<const RECT*>(lParam);
+
         SetWindowPos(
             hwnd,
             nullptr,
@@ -779,6 +893,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             suggested->right - suggested->left,
             suggested->bottom - suggested->top,
             SWP_NOZORDER | SWP_NOACTIVATE);
+
         LayoutControls(hwnd, state);
         InvalidateRect(hwnd, nullptr, TRUE);
         return 0;
@@ -790,14 +905,17 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
         }
 
         const int controlId = LOWORD(wParam);
-        const int formatCount = static_cast<int>(dkcolor::CopyFormat::Count);
+        const int formatCount =
+            static_cast<int>(dkcolor::CopyFormat::Count);
 
         if (controlId >= kFormatRadioBaseId &&
             controlId < kFormatRadioBaseId + formatCount &&
             HIWORD(wParam) == BN_CLICKED) {
-            state->copyFormat = static_cast<dkcolor::CopyFormat>(
-                controlId - kFormatRadioBaseId);
-            RefreshFormatRadios(state);
+            state->copyFormat =
+                static_cast<dkcolor::CopyFormat>(
+                    controlId - kFormatRadioBaseId);
+
+            RefreshFormatRadios(hwnd, state);
 
             if (state->onCopyFormatChanged != nullptr) {
                 state->onCopyFormatChanged(state->copyFormat);
@@ -820,9 +938,11 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
     case WM_LBUTTONDOWN:
         if (state != nullptr) {
-            POINT point{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            POINT point{
+                GET_X_LPARAM(lParam),
+                GET_Y_LPARAM(lParam)};
 
-            if (HandleColorSwatchClick(
+            if (HandleColorClick(
                     hwnd,
                     state,
                     point,
@@ -832,7 +952,8 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             }
 
             if (PointInside(state->cssNameRect, point)) {
-                FlashSwatch(hwnd, state, state->cssNameRect);
+                FlashRect(hwnd, state, state->cssNameRect);
+
                 if (state->onCopyText != nullptr) {
                     const dkcolor::CssNamedColor nearest =
                         dkcolor::NearestCssNamedColor(state->color);
@@ -841,8 +962,10 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 return 0;
             }
 
-            for (std::size_t index = 0; index < state->toneRects.size(); ++index) {
-                if (HandleColorSwatchClick(
+            for (std::size_t index = 0;
+                 index < state->toneRects.size();
+                 ++index) {
+                if (HandleColorClick(
                         hwnd,
                         state,
                         point,
@@ -852,8 +975,10 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 }
             }
 
-            for (std::size_t index = 0; index < state->harmonyRects.size(); ++index) {
-                if (HandleColorSwatchClick(
+            for (std::size_t index = 0;
+                 index < state->harmonyRects.size();
+                 ++index) {
+                if (HandleColorClick(
                         hwnd,
                         state,
                         point,
@@ -863,12 +988,15 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
                 }
             }
 
-            HandleLibraryClick(hwnd, state, point);
+            if (HandleLibraryClick(hwnd, state, point)) {
+                return 0;
+            }
         }
         return 0;
 
     case WM_TIMER:
-        if (wParam == kSwatchFeedbackTimerId && state != nullptr) {
+        if (wParam == kSwatchFeedbackTimerId &&
+            state != nullptr) {
             KillTimer(hwnd, kSwatchFeedbackTimerId);
             state->feedbackActive = false;
 
@@ -880,7 +1008,8 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
         break;
 
     case WM_ERASEBKGND:
-        if (state != nullptr && state->backgroundBrush != nullptr) {
+        if (state != nullptr &&
+            state->backgroundBrush != nullptr) {
             RECT client{};
             GetClientRect(hwnd, &client);
             FillRect(
@@ -897,17 +1026,8 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             HDC hdc = reinterpret_cast<HDC>(wParam);
             SetTextColor(hdc, dktheme::TextColor(state->theme));
             SetBkColor(hdc, dktheme::BackgroundColor(state->theme));
-            return reinterpret_cast<LRESULT>(state->backgroundBrush);
-        }
-        break;
-
-    case WM_CTLCOLOREDIT:
-    case WM_CTLCOLORLISTBOX:
-        if (state != nullptr) {
-            HDC hdc = reinterpret_cast<HDC>(wParam);
-            SetTextColor(hdc, dktheme::TextColor(state->theme));
-            SetBkColor(hdc, dktheme::ControlBackgroundColor(state->theme));
-            return reinterpret_cast<LRESULT>(state->controlBrush);
+            return reinterpret_cast<LRESULT>(
+                state->backgroundBrush);
         }
         break;
 
@@ -925,8 +1045,10 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
     case WM_NCDESTROY:
         if (state != nullptr) {
+            KillTimer(hwnd, kSwatchFeedbackTimerId);
             DeleteThemeBrushes(state);
         }
+
         SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
         delete state;
         return 0;
@@ -944,7 +1066,8 @@ bool RegisterUtilityWindowClass(HINSTANCE instance) {
     windowClass.lpfnWndProc = UtilityProc;
     windowClass.lpszClassName = kUtilityClass;
     windowClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-    windowClass.hIcon = LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
+    windowClass.hIcon =
+        LoadIconW(instance, MAKEINTRESOURCEW(IDI_APP_ICON));
     windowClass.hIconSm = windowClass.hIcon;
     windowClass.hbrBackground = nullptr;
 
@@ -974,11 +1097,14 @@ HWND CreateUtilityWindow(
         WS_EX_APPWINDOW,
         kUtilityClass,
         dkl10n::Text(L"tools.title").c_str(),
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+        WS_OVERLAPPED |
+            WS_CAPTION |
+            WS_SYSMENU |
+            WS_MINIMIZEBOX,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         780,
-        720,
+        900,
         owner,
         nullptr,
         instance,
@@ -989,11 +1115,21 @@ HWND CreateUtilityWindow(
         return nullptr;
     }
 
-    const int dpi = static_cast<int>(GetDpiForWindow(window));
-    RECT client{0, 0, MulDiv(760, dpi, 96), MulDiv(680, dpi, 96)};
+    const int dpi =
+        static_cast<int>(GetDpiForWindow(window));
+
+    RECT client{
+        0,
+        0,
+        MulDiv(760, dpi, 96),
+        MulDiv(850, dpi, 96)};
+
     AdjustWindowRectExForDpi(
         &client,
-        WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX,
+        WS_OVERLAPPED |
+            WS_CAPTION |
+            WS_SYSMENU |
+            WS_MINIMIZEBOX,
         FALSE,
         WS_EX_APPWINDOW,
         static_cast<UINT>(dpi));
@@ -1005,7 +1141,9 @@ HWND CreateUtilityWindow(
         0,
         client.right - client.left,
         client.bottom - client.top,
-        SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE);
+        SWP_NOMOVE |
+            SWP_NOZORDER |
+            SWP_NOACTIVATE);
 
     return window;
 }
@@ -1017,8 +1155,8 @@ void ShowUtilityWindow(HWND hwnd, COLORREF color) {
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
-    SetColorInternal(hwnd, state, color);
 
+    SetColorInternal(hwnd, state, color);
     ShowWindow(hwnd, SW_SHOWNORMAL);
     SetForegroundWindow(hwnd);
 }
@@ -1030,22 +1168,26 @@ void SetUtilityWindowColor(HWND hwnd, COLORREF color) {
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
     SetColorInternal(hwnd, state, color);
 }
 
-void SetUtilityCopyFormat(HWND hwnd, dkcolor::CopyFormat copyFormat) {
+void SetUtilityCopyFormat(
+    HWND hwnd,
+    dkcolor::CopyFormat copyFormat) {
     if (hwnd == nullptr) {
         return;
     }
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
     if (state == nullptr) {
         return;
     }
 
     state->copyFormat = copyFormat;
-    RefreshFormatRadios(state);
+    RefreshFormatRadios(hwnd, state);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
@@ -1058,6 +1200,7 @@ void SetUtilityCustomTemplate(
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
     if (state == nullptr) {
         return;
     }
@@ -1066,13 +1209,16 @@ void SetUtilityCustomTemplate(
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
-void RefreshUtilityWindow(HWND hwnd, dktheme::ThemeMode theme) {
+void RefreshUtilityWindow(
+    HWND hwnd,
+    dktheme::ThemeMode theme) {
     if (hwnd == nullptr) {
         return;
     }
 
     auto* state = reinterpret_cast<UtilityState*>(
         GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+
     if (state == nullptr) {
         return;
     }
