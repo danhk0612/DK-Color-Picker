@@ -2,21 +2,23 @@
 
 #include <windows.h>
 
+#include <cstddef>
 #include <string>
 
 namespace dkcolor {
 
 enum class CopyFormat : int {
     Hex = 0,
-    Rgb,
-    Hsl,
-    Hsv,
-    Hwb,
-    Cmyk,
-    Lab,
-    Oklch,
-    Custom,
-    Count,
+    Rgb = 1,
+    Hsl = 2,
+    Hsv = 3,
+    Hwb = 4,
+    Cmyk = 5,
+    Lab = 6,
+    Oklch = 7,
+    Custom = 8,
+    Rgba = 9,
+    Count = 10,
 };
 
 struct ColorValues {
@@ -52,6 +54,8 @@ struct ColorValues {
 ColorValues ConvertColor(COLORREF color);
 
 const wchar_t* CopyFormatLabel(CopyFormat format);
+CopyFormat CopyFormatAtDisplayIndex(std::size_t index);
+std::size_t CopyFormatDisplayIndex(CopyFormat format);
 std::wstring DefaultCustomTemplate();
 
 std::wstring FormatColor(
