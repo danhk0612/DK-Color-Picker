@@ -24,8 +24,9 @@ constexpr int kFormatRadioBaseId = 3020;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
 constexpr int kClientWidth = 720;
 constexpr int kMargin = 14;
-constexpr int kLibraryColumns = 5;
-constexpr int kLibraryRowHeight = 40;
+constexpr int kLibraryColumns = 4;
+constexpr int kLibraryRowHeight = 32;
+constexpr std::size_t kHarmonyColorCount = 10;
 
 struct UtilityState {
     std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
@@ -48,10 +49,8 @@ struct UtilityState {
     RECT currentRect{};
     RECT cssNameRect{};
 
-    std::array<RECT, 5> toneRects{};
-    std::array<RECT, 5> harmonyRects{};
-    std::array<COLORREF, 5> tones{};
-    std::array<COLORREF, 5> harmonies{};
+    std::array<RECT, kHarmonyColorCount> harmonyRects{};
+    std::array<COLORREF, kHarmonyColorCount> harmonies{};
 
     std::array<RECT, dkcolorlib::kMaxRecentColors> recentRects{};
     std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
@@ -219,18 +218,7 @@ CompactLayout CalculateCompactLayout(
     const UtilityState* state) {
     CompactLayout layout{};
 
-    const int top = Scale(hwnd, 44);
-    const int cardHeight = Scale(hwnd, 86);
-    const int toneTitleY = top + cardHeight + Scale(hwnd, 10);
-    const int toneTop = toneTitleY + Scale(hwnd, 20);
-    const int toneBottom = toneTop + Scale(hwnd, 38);
-
-    const int harmonyTitleY = toneBottom + Scale(hwnd, 10);
-    const int harmonyTop = harmonyTitleY + Scale(hwnd, 20);
-    const int harmonyBottom = harmonyTop + Scale(hwnd, 38);
-
-    const int contrastY = harmonyBottom + Scale(hwnd, 10);
-    layout.recentTitleY = contrastY + Scale(hwnd, 32);
+    layout.recentTitleY = Scale(hwnd, 344);
     layout.recentTop = layout.recentTitleY + Scale(hwnd, 22);
 
     const int recentRows =
@@ -249,13 +237,13 @@ CompactLayout CalculateCompactLayout(
         layout.clientHeight =
             layout.favoritesTop +
             favoriteRows * Scale(hwnd, kLibraryRowHeight) +
-            Scale(hwnd, 14);
+            Scale(hwnd, 12);
     } else {
         layout.clientHeight =
-            recentBottom + Scale(hwnd, 14);
+            recentBottom + Scale(hwnd, 12);
     }
 
-    const int minimumHeight = Scale(hwnd, 360);
+    const int minimumHeight = Scale(hwnd, 382);
     if (layout.clientHeight < minimumHeight) {
         layout.clientHeight = minimumHeight;
     }
