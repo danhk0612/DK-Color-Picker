@@ -53,11 +53,10 @@ Status: implemented on task/t04-main-ui
 - Native Win32 color utility window opened from tray
 - Current color card with HEX / RGB / HSL / OKLCH
 - Nearest CSS named color across all 148 names using CIELAB distance
-- Five tone steps using white/black mixing
-- Complementary, analogous and triadic harmony suggestions
-- Clickable tone and harmony swatches
-- WCAG contrast ratios against white and black
-- AA / AAA normal and large-text threshold labels
+- Complementary, analogous, triadic, split-complementary and square harmony suggestions
+- Compact clickable harmony swatches grouped by relationship
+- WCAG contrast ratios for white and black text
+- Explicit True / False results for AA / AAA normal and large-text thresholds
 - Picker selections update the utility window when it is open
 - Closing the utility window hides it while the tray process remains resident
 - Tray double-click opens the utility window
@@ -70,7 +69,7 @@ Status: implemented on task/t05-library-export
 - Duplicate recent colors move to the front
 - Persistent favorites, maximum 20 unique colors
 - Inline favorite toggles on color swatches
-- Copyable current / tone / harmony / recent / favorite swatches
+- Copyable current / harmony / recent / favorite swatches
 - Clear-recent action
 - Lightweight LocalAppData INI persistence without a database
 

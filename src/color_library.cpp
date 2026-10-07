@@ -167,22 +167,23 @@ void AddRecentColor(COLORREF color) {
     SaveList(L"Recent", colors);
 }
 
-bool ToggleFavoriteColor(COLORREF color) {
+FavoriteToggleResult ToggleFavoriteColor(COLORREF color) {
     std::vector<COLORREF> colors = LoadFavoriteColors();
     const auto existing = std::find(colors.begin(), colors.end(), color);
 
     if (existing != colors.end()) {
         colors.erase(existing);
         SaveList(L"Favorites", colors);
-        return false;
+        return FavoriteToggleResult::Removed;
+    }
+
+    if (colors.size() >= kMaxFavoriteColors) {
+        return FavoriteToggleResult::LimitReached;
     }
 
     colors.insert(colors.begin(), color);
-    if (colors.size() > kMaxFavoriteColors) {
-        colors.resize(kMaxFavoriteColors);
-    }
     SaveList(L"Favorites", colors);
-    return true;
+    return FavoriteToggleResult::Added;
 }
 
 bool IsFavoriteColor(COLORREF color) {

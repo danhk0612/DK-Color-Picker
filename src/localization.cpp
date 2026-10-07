@@ -15,7 +15,7 @@ struct Entry {
     const wchar_t* en;
 };
 
-constexpr std::array<Entry, 38> kEntries{{
+constexpr std::array<Entry, 44> kEntries{{
     {L"app.title", L"DK Color Picker", L"DK Color Picker"},
     {L"tray.pick", L"색 추출", L"Pick color"},
     {L"tray.tools", L"색상 도구 열기", L"Open color tools"},
@@ -37,14 +37,20 @@ constexpr std::array<Entry, 38> kEntries{{
     {L"language.en", L"영어", L"English"},
     {L"tools.title", L"DK Color Picker - 색상 도구", L"DK Color Picker - Color Tools"},
     {L"tools.clear_recent", L"최근 색상 정리", L"Clear recent colors"},
-    {L"tools.tones", L"톤", L"Tones"},
-    {L"tools.harmony", L"조화", L"Harmony"},
+    {L"tools.pick", L"Pick", L"Pick"},
+    {L"tools.complementary", L"보색", L"Complementary"},
+    {L"tools.analogous", L"유사색", L"Analogous"},
+    {L"tools.triadic", L"삼각 배색", L"Triadic"},
+    {L"tools.split_complementary", L"분할 보색", L"Split comp."},
+    {L"tools.square", L"사각 배색", L"Square"},
+    {L"tools.wcag", L"WCAG 대비", L"WCAG contrast"},
     {L"tools.recent", L"최근 색상", L"Recent colors"},
     {L"tools.favorites", L"즐겨찾기", L"Favorites"},
     {L"tools.nearest_css", L"유사 CSS 코드", L"Similar CSS"},
     {L"dialog.hotkey_failed", L"선택한 전역 단축키를 등록하지 못했습니다.\n다른 프로그램에서 이미 사용 중일 수 있습니다.", L"Could not register that global hotkey.\nAnother program may already be using it."},
     {L"dialog.autostart_failed", L"자동 시작 설정을 변경하지 못했습니다.", L"Could not change the startup setting."},
     {L"dialog.capture_failed", L"화면을 캡처하지 못했습니다.", L"Could not capture the screen."},
+    {L"dialog.favorite_limit", L"즐겨찾기는 최대 8개까지 저장할 수 있습니다.\n기존 즐겨찾기를 하나 제거한 뒤 다시 시도하세요.", L"Favorites are limited to 8 colors.\nRemove an existing favorite and try again."},
     {L"template.title", L"DK Color Picker - 사용자 템플릿", L"DK Color Picker - Custom Template"},
     {L"template.heading", L"사용자 정의 복사 템플릿", L"Custom copy template"},
     {L"template.save", L"저장", L"Save"},

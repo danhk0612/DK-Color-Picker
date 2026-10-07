@@ -4,7 +4,7 @@
 
 A lightweight, portable color picker for Windows 10/11.
 
-Press a hotkey, pick a color anywhere on your screen, and the selected color is copied to the clipboard immediately. DK Color Picker stays in the system tray and includes a compact Color Tools window for tones, harmony colors, recent colors, favorites, CSS color names, and WCAG contrast.
+Press a hotkey, pick a color anywhere on your screen, and the selected color is copied to the clipboard immediately. DK Color Picker stays in the system tray and includes a compact Color Tools window for harmony colors, recent colors, favorites, CSS color names, and WCAG contrast.
 
 ## Download
 
@@ -88,27 +88,23 @@ DK Color Picker compares the current color with all 148 CSS named colors and sho
 
 Click **Similar CSS: color-name** to copy the CSS color name itself.
 
-### Tones
+### Harmony colors
 
-Five tone swatches are generated from the current color:
+Color Tools groups harmony suggestions by relationship to the picked color:
 
-`lighter 50% · lighter 25% · original · darker 25% · darker 50%`
+- **Complementary**: 1 color at +180°
+- **Analogous**: 2 colors at -30° / +30°
+- **Triadic**: 2 colors at -120° / +120°
+- **Split complementary**: 2 colors at +150° / +210°
+- **Square**: 3 colors at +90° / +180° / +270°
 
-Click a tone to copy it. Tone clicks do not replace the current picked color and are not added to Recent Colors.
-
-### Harmony
-
-Harmony suggestions include:
-
-`complementary · analogous -30° · analogous +30° · triadic -120° · triadic +120°`
-
-Click a harmony color to copy it. Harmony clicks do not replace the current picked color and are not added to Recent Colors.
+Click any harmony swatch to copy its code. Harmony clicks do not replace the picked color and are not added to Recent Colors.
 
 ### Recent colors
 
 Only colors actually picked from the screen are added to Recent Colors.
 
-- Up to 20 unique colors are stored.
+- Up to 8 unique colors are stored.
 - Picking the same color again moves it to the front.
 - Clicking a recent color copies it without creating another history entry.
 - Use **Clear recent colors** to empty the list.
@@ -117,7 +113,7 @@ Only colors actually picked from the screen are added to Recent Colors.
 
 Use the **☆ / ★** control inside any color swatch to toggle Favorites.
 
-Favorites can be added from the current color, tones, harmony colors, recent colors, or existing favorites.
+Favorites can be added from the current color, harmony colors, recent colors, or existing favorites. Up to 8 favorites can be stored. If all 8 slots are already used, trying to add another color shows a warning and leaves the existing favorites unchanged.
 
 The Favorites section is hidden when empty and appears automatically when the first favorite is added.
 
@@ -135,9 +131,14 @@ The width is kept large enough to display color codes without making the window 
 
 ## WCAG contrast
 
-Color Tools shows contrast ratios between the current color and white/black.
+Color Tools evaluates white text and black text separately against the picked color.
 
-This is useful when checking text/background combinations for accessibility.
+For each text color it shows the contrast ratio and explicit `True / False` results for:
+
+- normal text: WCAG AA (4.5:1) and AAA (7:1)
+- large text: WCAG AA (3:1) and AAA (4.5:1)
+
+This makes it clear whether white or black text is suitable for the selected background color.
 
 ## Tray settings
 

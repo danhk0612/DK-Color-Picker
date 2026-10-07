@@ -24,8 +24,9 @@ constexpr int kFormatRadioBaseId = 3020;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
 constexpr int kClientWidth = 720;
 constexpr int kMargin = 14;
-constexpr int kLibraryColumns = 5;
-constexpr int kLibraryRowHeight = 40;
+constexpr int kLibraryColumns = 4;
+constexpr int kLibraryRowHeight = 32;
+constexpr std::size_t kHarmonyColorCount = 10;
 
 struct UtilityState {
     std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
@@ -48,10 +49,8 @@ struct UtilityState {
     RECT currentRect{};
     RECT cssNameRect{};
 
-    std::array<RECT, 5> toneRects{};
-    std::array<RECT, 5> harmonyRects{};
-    std::array<COLORREF, 5> tones{};
-    std::array<COLORREF, 5> harmonies{};
+    std::array<RECT, kHarmonyColorCount> harmonyRects{};
+    std::array<COLORREF, kHarmonyColorCount> harmonies{};
 
     std::array<RECT, dkcolorlib::kMaxRecentColors> recentRects{};
     std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
@@ -219,19 +218,8 @@ CompactLayout CalculateCompactLayout(
     const UtilityState* state) {
     CompactLayout layout{};
 
-    const int top = Scale(hwnd, 44);
-    const int cardHeight = Scale(hwnd, 86);
-    const int toneTitleY = top + cardHeight + Scale(hwnd, 10);
-    const int toneTop = toneTitleY + Scale(hwnd, 20);
-    const int toneBottom = toneTop + Scale(hwnd, 38);
-
-    const int harmonyTitleY = toneBottom + Scale(hwnd, 10);
-    const int harmonyTop = harmonyTitleY + Scale(hwnd, 20);
-    const int harmonyBottom = harmonyTop + Scale(hwnd, 38);
-
-    const int contrastY = harmonyBottom + Scale(hwnd, 10);
-    layout.recentTitleY = contrastY + Scale(hwnd, 32);
-    layout.recentTop = layout.recentTitleY + Scale(hwnd, 22);
+    layout.recentTitleY = Scale(hwnd, 344);
+    layout.recentTop = layout.recentTitleY + Scale(hwnd, 30);
 
     const int recentRows =
         state == nullptr ? 0 : LibraryRows(state->recentColors.size());
@@ -249,13 +237,13 @@ CompactLayout CalculateCompactLayout(
         layout.clientHeight =
             layout.favoritesTop +
             favoriteRows * Scale(hwnd, kLibraryRowHeight) +
-            Scale(hwnd, 14);
+            Scale(hwnd, 12);
     } else {
         layout.clientHeight =
-            recentBottom + Scale(hwnd, 14);
+            recentBottom + Scale(hwnd, 12);
     }
 
-    const int minimumHeight = Scale(hwnd, 360);
+    const int minimumHeight = Scale(hwnd, 382);
     if (layout.clientHeight < minimumHeight) {
         layout.clientHeight = minimumHeight;
     }
@@ -493,7 +481,20 @@ bool HandleColorClick(
     FlashRect(hwnd, state, rect);
 
     if (PointInside(StarRect(hwnd, rect), point)) {
-        dkcolorlib::ToggleFavoriteColor(color);
+        const dkcolorlib::FavoriteToggleResult result =
+            dkcolorlib::ToggleFavoriteColor(color);
+
+        if (result == dkcolorlib::FavoriteToggleResult::LimitReached) {
+            const std::wstring message =
+                dkl10n::Text(L"dialog.favorite_limit");
+            MessageBoxW(
+                hwnd,
+                message.c_str(),
+                L"DK Color Picker",
+                MB_OK | MB_ICONWARNING);
+            return true;
+        }
+
         RefreshLibraryState(state);
         ResizeUtilityToContent(hwnd, state);
         InvalidateRect(hwnd, nullptr, TRUE);
@@ -522,7 +523,7 @@ void DrawLibrarySwatches(
     constexpr int columns = kLibraryColumns;
     const int swatchWidth =
         (usableWidth - gap * (columns - 1)) / columns;
-    const int swatchHeight = Scale(hwnd, 36);
+    const int swatchHeight = Scale(hwnd, 28);
     const int rowGap = Scale(hwnd, 4);
 
     for (std::size_t index = 0; index < rectCount; ++index) {
@@ -555,17 +556,95 @@ void DrawLibrarySwatches(
     }
 }
 
+const wchar_t* BoolText(bool value) {
+    return value ? L"True" : L"False";
+}
+
+void DrawHarmonyRow(
+    HWND hwnd,
+    UtilityState* state,
+    HDC hdc,
+    HFONT font,
+    const std::wstring& label,
+    const COLORREF* colors,
+    std::size_t count,
+    std::size_t stateOffset,
+    int top) {
+    if (state == nullptr || colors == nullptr || count == 0) {
+        return;
+    }
+
+    const int margin = Scale(hwnd, kMargin);
+    const int labelWidth = Scale(hwnd, 96);
+    const int gap = Scale(hwnd, 5);
+    const int swatchLeft = margin + labelWidth;
+    const int swatchRight =
+        Scale(hwnd, kClientWidth - kMargin);
+    const int usableWidth = swatchRight - swatchLeft;
+    const int totalGap =
+        gap * static_cast<int>(count - 1);
+    const int colorWidth = usableWidth - totalGap;
+    const int swatchHeight = Scale(hwnd, 28);
+
+    RECT labelRect{
+        margin,
+        top,
+        swatchLeft - Scale(hwnd, 6),
+        top + swatchHeight};
+
+    SetTextColor(hdc, dktheme::TextColor(state->theme));
+    DrawTextW(
+        hdc,
+        label.c_str(),
+        -1,
+        &labelRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+    for (std::size_t index = 0; index < count; ++index) {
+        const std::size_t target = stateOffset + index;
+        if (target >= state->harmonies.size()) {
+            break;
+        }
+
+        const int indexInt = static_cast<int>(index);
+        const int countInt = static_cast<int>(count);
+        const int left =
+            swatchLeft +
+            (colorWidth * indexInt) / countInt +
+            gap * indexInt;
+        const int right =
+            swatchLeft +
+            (colorWidth * (indexInt + 1)) / countInt +
+            gap * indexInt;
+
+        RECT rect{
+            left,
+            top,
+            right,
+            top + swatchHeight};
+
+        state->harmonies[target] = colors[index];
+        state->harmonyRects[target] = rect;
+
+        DrawSwatch(
+            hwnd,
+            hdc,
+            rect,
+            colors[index],
+            DisplayCode(state, colors[index]),
+            font,
+            IsFavoriteInState(state, colors[index]),
+            true);
+    }
+}
+
 void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     if (state == nullptr) {
         return;
     }
 
     const int margin = Scale(hwnd, kMargin);
-    const int top = Scale(hwnd, 44);
-    const int cardHeight = Scale(hwnd, 86);
-    const int swatchWidth = Scale(hwnd, 142);
-    const int textLeft = margin + swatchWidth + Scale(hwnd, 14);
-    const int rowHeight = Scale(hwnd, 20);
+    const int rowHeight = Scale(hwnd, 18);
 
     HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
     HGDIOBJ oldFont = SelectObject(hdc, font);
@@ -573,11 +652,24 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     const COLORREF oldTextColor =
         SetTextColor(hdc, dktheme::TextColor(state->theme));
 
+    RECT pickLabelRect{
+        margin,
+        Scale(hwnd, 40),
+        Scale(hwnd, 150),
+        Scale(hwnd, 58)};
+    const std::wstring pickLabel = dkl10n::Text(L"tools.pick");
+    DrawTextW(
+        hdc,
+        pickLabel.c_str(),
+        -1,
+        &pickLabelRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
     state->currentRect = {
         margin,
-        top,
-        margin + swatchWidth,
-        top + cardHeight};
+        Scale(hwnd, 58),
+        margin + Scale(hwnd, 130),
+        Scale(hwnd, 102)};
 
     DrawSwatch(
         hwnd,
@@ -593,10 +685,10 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         dkcolor::NearestCssNamedColor(state->color);
 
     state->cssNameRect = {
-        textLeft,
-        top + Scale(hwnd, 20),
+        margin + Scale(hwnd, 144),
+        Scale(hwnd, 62),
         Scale(hwnd, kClientWidth - kMargin),
-        top + Scale(hwnd, 46)};
+        Scale(hwnd, 90)};
 
     const std::wstring cssText =
         dkl10n::Text(L"tools.nearest_css") +
@@ -611,148 +703,138 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         &state->cssNameRect,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    const int tonesTitleY =
-        top + cardHeight + Scale(hwnd, 10);
-    RECT tonesTitleRect{
-        margin,
-        tonesTitleY,
-        Scale(hwnd, kClientWidth - kMargin),
-        tonesTitleY + rowHeight};
-
-    SetTextColor(hdc, dktheme::TextColor(state->theme));
-    const std::wstring tonesTitleText =
-        dkl10n::Text(L"tools.tones");
-    DrawTextW(
-        hdc,
-        tonesTitleText.c_str(),
-        -1,
-        &tonesTitleRect,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    state->tones = dkcolor::ToneSteps(state->color);
-
-    const int swatchTop = tonesTitleY + Scale(hwnd, 20);
-    const int swatchGap = Scale(hwnd, 6);
-    const int usableWidth =
-        Scale(hwnd, kClientWidth - kMargin * 2);
-    const int smallSwatchWidth =
-        (usableWidth - swatchGap * 4) / 5;
-    const int smallSwatchHeight = Scale(hwnd, 38);
-
-    for (std::size_t index = 0; index < state->tones.size(); ++index) {
-        RECT rect{
-            margin + static_cast<int>(index) *
-                (smallSwatchWidth + swatchGap),
-            swatchTop,
-            margin + static_cast<int>(index) *
-                (smallSwatchWidth + swatchGap) +
-                smallSwatchWidth,
-            swatchTop + smallSwatchHeight};
-
-        state->toneRects[index] = rect;
-
-        DrawSwatch(
-            hwnd,
-            hdc,
-            rect,
-            state->tones[index],
-            DisplayCode(state, state->tones[index]),
-            font,
-            IsFavoriteInState(state, state->tones[index]),
-            true);
+    for (RECT& rect : state->harmonyRects) {
+        rect = {};
     }
-
-    const int harmonyTitleY =
-        swatchTop + smallSwatchHeight + Scale(hwnd, 10);
-    RECT harmonyTitleRect{
-        margin,
-        harmonyTitleY,
-        Scale(hwnd, kClientWidth - kMargin),
-        harmonyTitleY + rowHeight};
-
-    SetTextColor(hdc, dktheme::TextColor(state->theme));
-    const std::wstring harmonyTitle =
-        dkl10n::Text(L"tools.harmony");
-    DrawTextW(
-        hdc,
-        harmonyTitle.c_str(),
-        -1,
-        &harmonyTitleRect,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
     const dkcolor::HarmonySet harmony =
         dkcolor::HarmonyColors(state->color);
 
-    state->harmonies = {
-        harmony.complementary,
-        harmony.analogousLeft,
-        harmony.analogousRight,
-        harmony.triadicLeft,
-        harmony.triadicRight,
-    };
+    const COLORREF complementary[1]{
+        harmony.complementary};
 
-    const int harmonyTop =
-        harmonyTitleY + Scale(hwnd, 20);
+    DrawHarmonyRow(
+        hwnd,
+        state,
+        hdc,
+        font,
+        dkl10n::Text(L"tools.complementary"),
+        complementary,
+        1,
+        0,
+        Scale(hwnd, 112));
 
-    for (std::size_t index = 0; index < state->harmonies.size(); ++index) {
-        RECT rect{
-            margin + static_cast<int>(index) *
-                (smallSwatchWidth + swatchGap),
-            harmonyTop,
-            margin + static_cast<int>(index) *
-                (smallSwatchWidth + swatchGap) +
-                smallSwatchWidth,
-            harmonyTop + smallSwatchHeight};
+    DrawHarmonyRow(
+        hwnd,
+        state,
+        hdc,
+        font,
+        dkl10n::Text(L"tools.analogous"),
+        harmony.analogous.data(),
+        harmony.analogous.size(),
+        1,
+        Scale(hwnd, 144));
 
-        state->harmonyRects[index] = rect;
+    DrawHarmonyRow(
+        hwnd,
+        state,
+        hdc,
+        font,
+        dkl10n::Text(L"tools.triadic"),
+        harmony.triadic.data(),
+        harmony.triadic.size(),
+        3,
+        Scale(hwnd, 176));
 
-        DrawSwatch(
-            hwnd,
-            hdc,
-            rect,
-            state->harmonies[index],
-            DisplayCode(state, state->harmonies[index]),
-            font,
-            IsFavoriteInState(state, state->harmonies[index]),
-            true);
-    }
+    DrawHarmonyRow(
+        hwnd,
+        state,
+        hdc,
+        font,
+        dkl10n::Text(L"tools.split_complementary"),
+        harmony.splitComplementary.data(),
+        harmony.splitComplementary.size(),
+        5,
+        Scale(hwnd, 208));
 
-    const int contrastY =
-        harmonyTop + smallSwatchHeight + Scale(hwnd, 10);
+    DrawHarmonyRow(
+        hwnd,
+        state,
+        hdc,
+        font,
+        dkl10n::Text(L"tools.square"),
+        harmony.square.data(),
+        harmony.square.size(),
+        7,
+        Scale(hwnd, 240));
 
     const double whiteRatio =
         dkcolor::ContrastRatio(state->color, RGB(255, 255, 255));
     const double blackRatio =
         dkcolor::ContrastRatio(state->color, RGB(0, 0, 0));
 
-    wchar_t contrastText[160]{};
-    if (dkl10n::GetLanguage() == dkl10n::Language::English) {
-        swprintf_s(
-            contrastText,
-            L"WCAG  white %.2f:1  ·  black %.2f:1",
-            whiteRatio,
-            blackRatio);
-    } else {
-        swprintf_s(
-            contrastText,
-            L"WCAG  흰색 %.2f:1  ·  검정 %.2f:1",
-            whiteRatio,
-            blackRatio);
-    }
-
-    RECT contrastRect{
+    RECT wcagTitleRect{
         margin,
-        contrastY,
+        Scale(hwnd, 278),
         Scale(hwnd, kClientWidth - kMargin),
-        contrastY + Scale(hwnd, 26)};
+        Scale(hwnd, 296)};
 
     SetTextColor(hdc, dktheme::TextColor(state->theme));
+    const std::wstring wcagTitle =
+        dkl10n::Text(L"tools.wcag");
     DrawTextW(
         hdc,
-        contrastText,
+        wcagTitle.c_str(),
         -1,
-        &contrastRect,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+        &wcagTitleRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+
+    const auto drawWcagLine = [&](double ratio, bool white, int top) {
+        const bool normalAa = ratio >= 4.5;
+        const bool normalAaa = ratio >= 7.0;
+        const bool largeAa = ratio >= 3.0;
+        const bool largeAaa = ratio >= 4.5;
+
+        wchar_t buffer[320]{};
+        if (dkl10n::GetLanguage() == dkl10n::Language::English) {
+            swprintf_s(
+                buffer,
+                L"%s text %.2f:1 | Normal AA %s / AAA %s | Large AA %s / AAA %s",
+                white ? L"White" : L"Black",
+                ratio,
+                BoolText(normalAa),
+                BoolText(normalAaa),
+                BoolText(largeAa),
+                BoolText(largeAaa));
+        } else {
+            swprintf_s(
+                buffer,
+                L"%s 글자 %.2f:1 | 일반 AA %s / AAA %s | 큰 글자 AA %s / AAA %s",
+                white ? L"흰색" : L"검정",
+                ratio,
+                BoolText(normalAa),
+                BoolText(normalAaa),
+                BoolText(largeAa),
+                BoolText(largeAaa));
+        }
+
+        RECT rect{
+            margin,
+            Scale(hwnd, top),
+            Scale(hwnd, kClientWidth - kMargin),
+            Scale(hwnd, top + 18)};
+
+        SetTextColor(hdc, dktheme::TextColor(state->theme));
+        DrawTextW(
+            hdc,
+            buffer,
+            -1,
+            &rect,
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+    };
+
+    drawWcagLine(whiteRatio, true, 296);
+    drawWcagLine(blackRatio, false, 316);
 
     const CompactLayout layout =
         CalculateCompactLayout(hwnd, state);
@@ -1033,19 +1115,6 @@ LRESULT CALLBACK UtilityProc(
                     state->onCopyText(nearest.name);
                 }
                 return 0;
-            }
-
-            for (std::size_t index = 0;
-                 index < state->toneRects.size();
-                 ++index) {
-                if (HandleColorClick(
-                        hwnd,
-                        state,
-                        point,
-                        state->toneRects[index],
-                        state->tones[index])) {
-                    return 0;
-                }
             }
 
             for (std::size_t index = 0;
