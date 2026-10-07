@@ -1163,7 +1163,7 @@ LRESULT CALLBACK TemplateEditorProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
             nullptr);
 
         const std::wstring helpText =
-            std::wstring(L"{hex} {rgb} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}\r\n") +
+            std::wstring(L"{hex} {rgb} {rgba} {hsl} {hsv} {hwb} {cmyk} {lab} {oklch}\r\n") +
             dkl10n::Text(L"template.components") +
             L": {r} {g} {b}, {hsl_h} {hsl_s} {hsl_l}, "
             L"{hsv_h} {hsv_s} {hsv_v}, {hwb_h} {hwb_w} {hwb_b},\r\n"
@@ -1422,13 +1422,13 @@ void ShowTrayMenu(HWND hwnd) {
 
     const UINT formatCount = static_cast<UINT>(dkcolor::CopyFormat::Count);
     for (UINT i = 0; i < formatCount; ++i) {
-        const auto format = static_cast<dkcolor::CopyFormat>(i);
+        const auto format = dkcolor::CopyFormatAtDisplayIndex(i);
         const std::wstring label = CopyFormatDisplayName(format);
         AppendCheckedMenuItem(
             formatMenu,
             kMenuFormatBase + i,
             label.c_str(),
-            g_settings.copyFormat == static_cast<int>(i));
+            g_settings.copyFormat == static_cast<int>(format));
     }
     AppendMenuW(formatMenu, MF_SEPARATOR, 0, nullptr);
     const std::wstring templateLabel = dkl10n::Text(L"tray.template_edit");
@@ -1554,7 +1554,9 @@ void ShowTrayMenu(HWND hwnd) {
     if (selected >= kMenuFormatBase &&
         selected < kMenuFormatBase + formatCount) {
         g_settings.copyFormat =
-            static_cast<int>(selected - kMenuFormatBase);
+            static_cast<int>(
+                dkcolor::CopyFormatAtDisplayIndex(
+                    selected - kMenuFormatBase));
         SaveSettings();
 
         if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
