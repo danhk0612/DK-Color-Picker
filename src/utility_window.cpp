@@ -285,6 +285,29 @@ bool PointInside(const RECT& rect, POINT point) {
         point.y < rect.bottom;
 }
 
+bool IsFavoriteInState(const UtilityState* state, COLORREF color) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    return std::find(
+        state->favoriteColors.begin(),
+        state->favoriteColors.end(),
+        color) != state->favoriteColors.end();
+}
+
+RECT StarRect(HWND hwnd, const RECT& rect) {
+    const int size = std::min(
+        Scale(hwnd, 22),
+        std::max(Scale(hwnd, 16), rect.bottom - rect.top - Scale(hwnd, 4)));
+
+    return {
+        rect.right - size - Scale(hwnd, 2),
+        rect.top + Scale(hwnd, 2),
+        rect.right - Scale(hwnd, 2),
+        rect.top + Scale(hwnd, 2) + size};
+}
+
 void FlashSwatch(HWND hwnd, UtilityState* state, const RECT& rect) {
     if (state == nullptr) {
         return;
@@ -329,11 +352,13 @@ COLORREF BestTextColor(COLORREF background) {
 }
 
 void DrawSwatch(
+    HWND hwnd,
     HDC hdc,
     const RECT& rect,
     COLORREF color,
     const std::wstring& label,
     HFONT font,
+    bool favorite,
     bool compact = false) {
     HBRUSH brush = CreateSolidBrush(color);
     FillRect(hdc, &rect, brush);
@@ -349,9 +374,12 @@ void DrawSwatch(
 
     HGDIOBJ oldFont = SelectObject(hdc, font);
     const int oldBkMode = SetBkMode(hdc, TRANSPARENT);
-    const COLORREF oldTextColor = SetTextColor(hdc, BestTextColor(color));
+    const COLORREF textColor = BestTextColor(color);
+    const COLORREF oldTextColor = SetTextColor(hdc, textColor);
 
     RECT textRect = rect;
+    textRect.left += Scale(hwnd, 4);
+    textRect.right -= Scale(hwnd, 24);
     DrawTextW(
         hdc,
         label.c_str(),
@@ -360,9 +388,42 @@ void DrawSwatch(
         DT_CENTER | DT_VCENTER | DT_SINGLELINE |
             (compact ? DT_END_ELLIPSIS : 0));
 
+    RECT starRect = StarRect(hwnd, rect);
+    DrawTextW(
+        hdc,
+        favorite ? L"★" : L"☆",
+        -1,
+        &starRect,
+        DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+
     SetTextColor(hdc, oldTextColor);
     SetBkMode(hdc, oldBkMode);
     SelectObject(hdc, oldFont);
+}
+
+bool HandleColorSwatchClick(
+    HWND hwnd,
+    UtilityState* state,
+    POINT point,
+    const RECT& rect,
+    COLORREF color) {
+    if (state == nullptr || !PointInside(rect, point)) {
+        return false;
+    }
+
+    FlashSwatch(hwnd, state, rect);
+
+    if (PointInside(StarRect(hwnd, rect), point)) {
+        dkcolorlib::ToggleFavoriteColor(color);
+        RefreshLibraryState(state);
+        InvalidateRect(hwnd, nullptr, TRUE);
+        return true;
+    }
+
+    if (state->onCopyColor != nullptr) {
+        state->onCopyColor(color);
+    }
+    return true;
 }
 
 void DrawLibrarySwatches(
@@ -399,11 +460,13 @@ void DrawLibrarySwatches(
             top + row * (swatchHeight + rowGap) + swatchHeight};
         rects[index] = rect;
         DrawSwatch(
+            hwnd,
             hdc,
             rect,
             colors[index],
             DisplayCode(state, colors[index]),
             font,
+            IsFavoriteInState(state, colors[index]),
             true);
     }
 }
@@ -416,11 +479,11 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     RefreshLibraryState(state);
 
     const int margin = Scale(hwnd, 20);
-    const int top = Scale(hwnd, 92);
+    const int top = Scale(hwnd, 54);
     const int cardHeight = Scale(hwnd, 104);
     const int swatchWidth = Scale(hwnd, 152);
     const int textLeft = margin + swatchWidth + Scale(hwnd, 20);
-    const int rowHeight = Scale(hwnd, 24);
+    const int rowHeight = Scale(hwnd, 28);
 
     HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
     HGDIOBJ oldFont = SelectObject(hdc, font);
@@ -428,54 +491,61 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     const COLORREF oldTextColor =
         SetTextColor(hdc, dktheme::TextColor(state->theme));
 
-    RECT currentSwatch{
+    state->currentRect = {
         margin,
         top,
         margin + swatchWidth,
         top + cardHeight};
+
     DrawSwatch(
+        hwnd,
         hdc,
-        currentSwatch,
+        state->currentRect,
         state->color,
         DisplayCode(state, state->color),
         font,
+        IsFavoriteInState(state, state->color),
         true);
 
     const dkcolor::CssNamedColor nearest =
         dkcolor::NearestCssNamedColor(state->color);
 
-    const std::wstring formatLabel =
-        CopyFormatDisplayName(state->copyFormat);
-    const std::wstring activeFormatLabel =
-        dkl10n::Text(L"tools.active_format");
     const std::wstring currentCodeLabel =
         dkl10n::Text(L"tools.current_code");
     const std::wstring nearestLabel =
         dkl10n::Text(L"tools.nearest_css");
 
-    std::array<std::wstring, 3> lines{
-        activeFormatLabel + L": " + formatLabel,
-        currentCodeLabel + L": " + DisplayCode(state, state->color),
-        nearestLabel + L": " +
-            std::wstring(nearest.name) +
-            L"  " +
-            DisplayCode(state, nearest.color),
-    };
+    RECT currentCodeRect{
+        textLeft,
+        top,
+        Scale(hwnd, 740),
+        top + rowHeight};
+    SetTextColor(hdc, dktheme::TextColor(state->theme));
+    const std::wstring currentCodeText =
+        currentCodeLabel + L": " + DisplayCode(state, state->color);
+    DrawTextW(
+        hdc,
+        currentCodeText.c_str(),
+        -1,
+        &currentCodeRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
-    for (std::size_t index = 0; index < lines.size(); ++index) {
-        SetTextColor(hdc, dktheme::TextColor(state->theme));
-        RECT lineRect{
-            textLeft,
-            top + static_cast<int>(index) * rowHeight,
-            Scale(hwnd, 740),
-            top + static_cast<int>(index + 1) * rowHeight};
-        DrawTextW(
-            hdc,
-            lines[index].c_str(),
-            -1,
-            &lineRect,
-            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
-    }
+    state->cssNameRect = {
+        textLeft,
+        top + rowHeight,
+        Scale(hwnd, 740),
+        top + rowHeight * 2};
+    const std::wstring cssText =
+        nearestLabel + L": " +
+        std::wstring(nearest.name) +
+        L"  " +
+        DisplayCode(state, nearest.color);
+    DrawTextW(
+        hdc,
+        cssText.c_str(),
+        -1,
+        &state->cssNameRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     const int tonesTitleY = top + cardHeight + Scale(hwnd, 15);
     RECT tonesTitle{
@@ -508,11 +578,13 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             swatchTop + smallSwatchHeight};
         state->toneRects[index] = rect;
         DrawSwatch(
+            hwnd,
             hdc,
             rect,
             state->tones[index],
             DisplayCode(state, state->tones[index]),
             font,
+            IsFavoriteInState(state, state->tones[index]),
             true);
     }
 
@@ -549,11 +621,13 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             harmonyTop + smallSwatchHeight};
         state->harmonyRects[index] = rect;
         DrawSwatch(
+            hwnd,
             hdc,
             rect,
             state->harmonies[index],
             DisplayCode(state, state->harmonies[index]),
             font,
+            IsFavoriteInState(state, state->harmonies[index]),
             true);
     }
 
@@ -640,33 +714,19 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         state->favoriteRects.size(),
         favoritesTop);
 
-    RECT exportLabel{
-        margin + Scale(hwnd, 126),
-        Scale(hwnd, 700),
-        margin + Scale(hwnd, 246),
-        Scale(hwnd, 728)};
-    SetTextColor(hdc, dktheme::TextColor(state->theme));
-    const std::wstring exportText = dkl10n::Text(L"tools.export");
-    DrawTextW(
-        hdc,
-        exportText.c_str(),
-        -1,
-        &exportLabel,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
-
-    RECT helpRect{
-        margin,
-        Scale(hwnd, 736),
+    RECT hintRect{
+        margin + Scale(hwnd, 138),
+        Scale(hwnd, 620),
         Scale(hwnd, 740),
-        Scale(hwnd, 760)};
+        Scale(hwnd, 648)};
     SetTextColor(hdc, dktheme::MutedTextColor(state->theme));
-    const std::wstring helpText = dkl10n::Text(L"tools.help");
+    const std::wstring hintText = dkl10n::Text(L"tools.star_hint");
     DrawTextW(
         hdc,
-        helpText.c_str(),
+        hintText.c_str(),
         -1,
-        &helpRect,
-        DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+        &hintRect,
+        DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 
     DrawSwatchFeedback(hwnd, state, hdc);
 
@@ -684,14 +744,12 @@ void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
          index < state->recentColors.size() &&
          index < state->recentRects.size();
          ++index) {
-        if (PointInside(state->recentRects[index], point)) {
-            FlashSwatch(hwnd, state, state->recentRects[index]);
-            SetColorInternal(
+        if (HandleColorSwatchClick(
                 hwnd,
                 state,
-                state->recentColors[index],
-                true,
-                false);
+                point,
+                state->recentRects[index],
+                state->recentColors[index])) {
             return;
         }
     }
@@ -700,14 +758,12 @@ void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
          index < state->favoriteColors.size() &&
          index < state->favoriteRects.size();
          ++index) {
-        if (PointInside(state->favoriteRects[index], point)) {
-            FlashSwatch(hwnd, state, state->favoriteRects[index]);
-            SetColorInternal(
+        if (HandleColorSwatchClick(
                 hwnd,
                 state,
-                state->favoriteColors[index],
-                true,
-                false);
+                point,
+                state->favoriteRects[index],
+                state->favoriteColors[index])) {
             return;
         }
     }
