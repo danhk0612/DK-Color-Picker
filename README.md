@@ -4,7 +4,7 @@
 
 A lightweight, portable color picker for Windows 10/11.
 
-Press a hotkey, pick a color anywhere on your screen, and the selected color is copied to the clipboard immediately. DK Color Picker stays in the system tray and includes a compact Color Tools window for tones, harmony colors, recent colors, favorites, CSS color names, and WCAG contrast.
+Press a hotkey, pick a color anywhere on your screen, and the selected color is copied to the clipboard immediately. DK Color Picker stays in the system tray and includes a compact Color Tools window for harmony colors, recent colors, favorites, CSS color names, and WCAG contrast.
 
 ## Download
 
@@ -113,7 +113,7 @@ Only colors actually picked from the screen are added to Recent Colors.
 
 Use the **☆ / ★** control inside any color swatch to toggle Favorites.
 
-Favorites can be added from the current color, tones, harmony colors, recent colors, or existing favorites.
+Favorites can be added from the current color, harmony colors, recent colors, or existing favorites. Up to 8 favorites can be stored. If all 8 slots are already used, trying to add another color shows a warning and leaves the existing favorites unchanged.
 
 The Favorites section is hidden when empty and appears automatically when the first favorite is added.
 
