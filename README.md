@@ -104,7 +104,7 @@ Click any harmony swatch to copy its code. Harmony clicks do not replace the pic
 
 Only colors actually picked from the screen are added to Recent Colors.
 
-- Up to 20 unique colors are stored.
+- Up to 8 unique colors are stored.
 - Picking the same color again moves it to the front.
 - Clicking a recent color copies it without creating another history entry.
 - Use **Clear recent colors** to empty the list.
