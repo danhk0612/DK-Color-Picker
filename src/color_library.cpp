@@ -144,66 +144,6 @@ void SaveList(
         path.c_str());
 }
 
-std::wstring CssExport(const std::vector<COLORREF>& colors) {
-    std::wstring output = L":root {\r\n";
-    for (std::size_t index = 0; index < colors.size(); ++index) {
-        output += L"  --color-" + std::to_wstring(index + 1) +
-            L": " + Hex(colors[index]) + L";\r\n";
-    }
-    output += L"}\r\n";
-    return output;
-}
-
-std::wstring JsonExport(const std::vector<COLORREF>& colors) {
-    std::wstring output = L"{\r\n";
-    for (std::size_t index = 0; index < colors.size(); ++index) {
-        output += L"  \"color-" + std::to_wstring(index + 1) +
-            L"\": \"" + Hex(colors[index]) + L"\"";
-        if (index + 1 != colors.size()) {
-            output += L",";
-        }
-        output += L"\r\n";
-    }
-    output += L"}\r\n";
-    return output;
-}
-
-std::wstring TailwindExport(const std::vector<COLORREF>& colors) {
-    std::wstring output = L"{\r\n";
-    for (std::size_t index = 0; index < colors.size(); ++index) {
-        output += L"  'color-" + std::to_wstring(index + 1) +
-            L"': '" + Hex(colors[index]) + L"'";
-        if (index + 1 != colors.size()) {
-            output += L",";
-        }
-        output += L"\r\n";
-    }
-    output += L"}\r\n";
-    return output;
-}
-
-std::wstring GimpExport(const std::vector<COLORREF>& colors) {
-    std::wstring output =
-        L"GIMP Palette\r\n"
-        L"Name: DK Color Picker\r\n"
-        L"Columns: 5\r\n"
-        L"#\r\n";
-
-    for (std::size_t index = 0; index < colors.size(); ++index) {
-        wchar_t line[96]{};
-        swprintf_s(
-            line,
-            L"%3u %3u %3u\tcolor-%zu\r\n",
-            static_cast<unsigned>(GetRValue(colors[index])),
-            static_cast<unsigned>(GetGValue(colors[index])),
-            static_cast<unsigned>(GetBValue(colors[index])),
-            index + 1);
-        output += line;
-    }
-
-    return output;
-}
-
 } // namespace
 
 std::vector<COLORREF> LoadRecentColors() {
@@ -252,23 +192,6 @@ bool IsFavoriteColor(COLORREF color) {
 
 void ClearRecentColors() {
     SaveList(L"Recent", {});
-}
-
-std::wstring ExportPaletteText(
-    const std::vector<COLORREF>& colors,
-    PaletteExportFormat format) {
-    switch (format) {
-    case PaletteExportFormat::CssVariables:
-        return CssExport(colors);
-    case PaletteExportFormat::Json:
-        return JsonExport(colors);
-    case PaletteExportFormat::Tailwind:
-        return TailwindExport(colors);
-    case PaletteExportFormat::GimpGpl:
-        return GimpExport(colors);
-    }
-
-    return {};
 }
 
 } // namespace dkcolorlib
