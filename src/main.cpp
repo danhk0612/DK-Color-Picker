@@ -697,17 +697,18 @@ void OnUtilityColorChanged(COLORREF color) {
     g_currentColor = color;
 }
 
-void OnUtilityCopyFormatChanged(dkcolor::CopyFormat format) {
-    g_settings.copyFormat = static_cast<int>(format);
-    SaveSettings();
-}
-
 void OnUtilityCopyColor(COLORREF color) {
     const std::wstring text = dkcolor::FormatColor(
         color,
         CurrentCopyFormat(),
         g_settings.customTemplate);
     CopyTextToClipboard(g_messageWindow, text);
+}
+
+void OnUtilityCopyFormatChanged(dkcolor::CopyFormat format) {
+    g_settings.copyFormat = static_cast<int>(format);
+    SaveSettings();
+    OnUtilityCopyColor(g_currentColor);
 }
 
 dktheme::ThemeMode CurrentThemeMode() {
@@ -739,6 +740,7 @@ void OpenUtilityWindow() {
             g_messageWindow,
             g_currentColor,
             CurrentCopyFormat(),
+            g_settings.customTemplate,
             CurrentThemeMode(),
             OnUtilityColorChanged,
             OnUtilityCopyColor,
@@ -1336,6 +1338,12 @@ bool ShowTemplateEditor(HWND owner) {
 
     g_settings.customTemplate = state.value;
     SaveSettings();
+
+    if (g_utilityWindow != nullptr && IsWindow(g_utilityWindow)) {
+        dkcolorui::SetUtilityCustomTemplate(
+            g_utilityWindow,
+            g_settings.customTemplate);
+    }
     return true;
 }
 
