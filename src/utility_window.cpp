@@ -87,28 +87,6 @@ std::wstring CopyFormatDisplayName(dkcolor::CopyFormat format) {
     return dkcolor::CopyFormatLabel(format);
 }
 
-std::wstring ContrastGrade(double ratio) {
-    const bool english =
-        dkl10n::GetLanguage() == dkl10n::Language::English;
-
-    if (ratio >= 7.0) {
-        return english
-            ? L"AA/AAA normal & large pass"
-            : L"AA/AAA 일반·큰 글자 통과";
-    }
-    if (ratio >= 4.5) {
-        return english
-            ? L"AA normal, AA/AAA large pass"
-            : L"AA 일반, AA/AAA 큰 글자 통과";
-    }
-    if (ratio >= 3.0) {
-        return english
-            ? L"AA large pass"
-            : L"AA 큰 글자 통과";
-    }
-    return english ? L"Below WCAG AA" : L"WCAG AA 대비 기준 미달";
-}
-
 void DeleteThemeBrushes(UtilityState* state) {
     if (state == nullptr) {
         return;
@@ -370,6 +348,7 @@ void SetColorInternal(
 
     state->color = color;
     RefreshLibraryState(state);
+    ResizeUtilityToContent(hwnd, state);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
@@ -513,6 +492,7 @@ bool HandleColorClick(
     if (PointInside(StarRect(hwnd, rect), point)) {
         dkcolorlib::ToggleFavoriteColor(color);
         RefreshLibraryState(state);
+        ResizeUtilityToContent(hwnd, state);
         InvalidateRect(hwnd, nullptr, TRUE);
         return true;
     }
@@ -777,7 +757,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     RECT recentTitleRect{
         margin,
         layout.recentTitleY,
-        Scale(hwnd, kClientWidth - Scale(hwnd, 140)),
+        Scale(hwnd, kClientWidth - 140),
         layout.recentTitleY + rowHeight};
 
     const std::wstring recentTitle =
@@ -951,10 +931,11 @@ LRESULT CALLBACK UtilityProc(
 
         SetControlFont(state->clearRecent, font);
 
-        LayoutControls(hwnd, state);
         RefreshLibraryState(state);
+        LayoutControls(hwnd, state);
         ApplyLocalizedLabels(hwnd, state);
         ApplyTheme(hwnd, state);
+        ResizeUtilityToContent(hwnd, state);
         return 0;
     }
 
@@ -976,6 +957,7 @@ LRESULT CALLBACK UtilityProc(
             SWP_NOZORDER | SWP_NOACTIVATE);
 
         LayoutControls(hwnd, state);
+        ResizeUtilityToContent(hwnd, state);
         InvalidateRect(hwnd, nullptr, TRUE);
         return 0;
     }
@@ -1010,6 +992,7 @@ LRESULT CALLBACK UtilityProc(
             HIWORD(wParam) == BN_CLICKED) {
             dkcolorlib::ClearRecentColors();
             RefreshLibraryState(state);
+            ResizeUtilityToContent(hwnd, state);
             InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
@@ -1183,8 +1166,8 @@ HWND CreateUtilityWindow(
             WS_MINIMIZEBOX,
         CW_USEDEFAULT,
         CW_USEDEFAULT,
-        780,
-        900,
+        740,
+        500,
         owner,
         nullptr,
         instance,
@@ -1195,35 +1178,7 @@ HWND CreateUtilityWindow(
         return nullptr;
     }
 
-    const int dpi =
-        static_cast<int>(GetDpiForWindow(window));
-
-    RECT client{
-        0,
-        0,
-        MulDiv(760, dpi, 96),
-        MulDiv(850, dpi, 96)};
-
-    AdjustWindowRectExForDpi(
-        &client,
-        WS_OVERLAPPED |
-            WS_CAPTION |
-            WS_SYSMENU |
-            WS_MINIMIZEBOX,
-        FALSE,
-        WS_EX_APPWINDOW,
-        static_cast<UINT>(dpi));
-
-    SetWindowPos(
-        window,
-        nullptr,
-        0,
-        0,
-        client.right - client.left,
-        client.bottom - client.top,
-        SWP_NOMOVE |
-            SWP_NOZORDER |
-            SWP_NOACTIVATE);
+    ResizeUtilityToContent(window, state);
 
     return window;
 }
@@ -1307,6 +1262,7 @@ void RefreshUtilityWindow(
     ApplyLocalizedLabels(hwnd, state);
     RefreshLibraryState(state);
     ApplyTheme(hwnd, state);
+    ResizeUtilityToContent(hwnd, state);
     InvalidateRect(hwnd, nullptr, TRUE);
 }
 
