@@ -29,6 +29,7 @@ constexpr int kExportCssId = 3010;
 constexpr int kExportJsonId = 3011;
 constexpr int kExportTailwindId = 3012;
 constexpr int kExportGimpId = 3013;
+constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
 
 struct UtilityState {
     HWND input = nullptr;
@@ -44,6 +45,7 @@ struct UtilityState {
 
     COLORREF color = RGB(59, 130, 246);
     dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
+    std::wstring customTemplate = dkcolor::DefaultCustomTemplate();
     dktheme::ThemeMode theme = dktheme::ThemeMode::System;
     ColorChangedCallback onColorChanged = nullptr;
     CopyColorCallback onCopyColor = nullptr;
@@ -61,6 +63,9 @@ struct UtilityState {
     std::array<RECT, dkcolorlib::kMaxFavoriteColors> favoriteRects{};
     std::vector<COLORREF> recentColors;
     std::vector<COLORREF> favoriteColors;
+
+    RECT feedbackRect{};
+    bool feedbackActive = false;
 };
 
 int Scale(HWND hwnd, int value) {
@@ -69,6 +74,17 @@ int Scale(HWND hwnd, int value) {
 
 std::wstring Hex(COLORREF color) {
     return dkcolor::FormatColor(color, dkcolor::CopyFormat::Hex, L"");
+}
+
+std::wstring DisplayCode(const UtilityState* state, COLORREF color) {
+    if (state == nullptr) {
+        return Hex(color);
+    }
+
+    return dkcolor::FormatColor(
+        color,
+        state->copyFormat,
+        state->customTemplate);
 }
 
 std::wstring CopyFormatDisplayName(dkcolor::CopyFormat format) {
@@ -352,6 +368,43 @@ bool PointInside(const RECT& rect, POINT point) {
         point.y < rect.bottom;
 }
 
+void FlashSwatch(HWND hwnd, UtilityState* state, const RECT& rect) {
+    if (state == nullptr) {
+        return;
+    }
+
+    state->feedbackRect = rect;
+    state->feedbackActive = true;
+
+    RECT dirty = rect;
+    InflateRect(&dirty, Scale(hwnd, 4), Scale(hwnd, 4));
+    InvalidateRect(hwnd, &dirty, FALSE);
+
+    KillTimer(hwnd, kSwatchFeedbackTimerId);
+    SetTimer(hwnd, kSwatchFeedbackTimerId, 160, nullptr);
+}
+
+void DrawSwatchFeedback(HWND hwnd, UtilityState* state, HDC hdc) {
+    if (state == nullptr || !state->feedbackActive) {
+        return;
+    }
+
+    HPEN pen = CreatePen(
+        PS_SOLID,
+        Scale(hwnd, 3),
+        GetSysColor(COLOR_HIGHLIGHT));
+    HGDIOBJ oldPen = SelectObject(hdc, pen);
+    HGDIOBJ oldBrush = SelectObject(hdc, GetStockObject(NULL_BRUSH));
+
+    RECT rect = state->feedbackRect;
+    InflateRect(&rect, Scale(hwnd, 2), Scale(hwnd, 2));
+    Rectangle(hdc, rect.left, rect.top, rect.right, rect.bottom);
+
+    SelectObject(hdc, oldBrush);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+}
+
 COLORREF BestTextColor(COLORREF background) {
     const double blackRatio = dkcolor::ContrastRatio(background, RGB(0, 0, 0));
     const double whiteRatio = dkcolor::ContrastRatio(background, RGB(255, 255, 255));
@@ -397,6 +450,7 @@ void DrawSwatch(
 
 void DrawLibrarySwatches(
     HWND hwnd,
+    UtilityState* state,
     HDC hdc,
     HFONT font,
     const std::vector<COLORREF>& colors,
@@ -427,7 +481,13 @@ void DrawLibrarySwatches(
             margin + column * (swatchWidth + gap) + swatchWidth,
             top + row * (swatchHeight + rowGap) + swatchHeight};
         rects[index] = rect;
-        DrawSwatch(hdc, rect, colors[index], Hex(colors[index]), font, true);
+        DrawSwatch(
+            hdc,
+            rect,
+            colors[index],
+            DisplayCode(state, colors[index]),
+            font,
+            true);
     }
 }
 
@@ -602,39 +662,50 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     const int cardHeight = Scale(hwnd, 104);
     const int swatchWidth = Scale(hwnd, 152);
     const int textLeft = margin + swatchWidth + Scale(hwnd, 20);
-    const int rowHeight = Scale(hwnd, 20);
+    const int rowHeight = Scale(hwnd, 24);
 
     HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
     HGDIOBJ oldFont = SelectObject(hdc, font);
-    SetBkMode(hdc, TRANSPARENT);
-    SetTextColor(hdc, dktheme::TextColor(state->theme));
+    const int oldBkMode = SetBkMode(hdc, TRANSPARENT);
+    const COLORREF oldTextColor =
+        SetTextColor(hdc, dktheme::TextColor(state->theme));
 
     RECT currentSwatch{
         margin,
         top,
         margin + swatchWidth,
         top + cardHeight};
-    DrawSwatch(hdc, currentSwatch, state->color, Hex(state->color), font);
+    DrawSwatch(
+        hdc,
+        currentSwatch,
+        state->color,
+        DisplayCode(state, state->color),
+        font,
+        true);
 
     const dkcolor::CssNamedColor nearest =
         dkcolor::NearestCssNamedColor(state->color);
 
-    const std::wstring nearestLabel = dkl10n::Text(L"tools.nearest_css");
-    std::array<std::wstring, 5> lines{
-        L"HEX  " + Hex(state->color),
-        L"RGB  " + dkcolor::FormatColor(
-            state->color, dkcolor::CopyFormat::Rgb, L""),
-        L"HSL  " + dkcolor::FormatColor(
-            state->color, dkcolor::CopyFormat::Hsl, L""),
-        L"OKLCH  " + dkcolor::FormatColor(
-            state->color, dkcolor::CopyFormat::Oklch, L""),
+    const std::wstring formatLabel =
+        CopyFormatDisplayName(state->copyFormat);
+    const std::wstring activeFormatLabel =
+        dkl10n::Text(L"tools.active_format");
+    const std::wstring currentCodeLabel =
+        dkl10n::Text(L"tools.current_code");
+    const std::wstring nearestLabel =
+        dkl10n::Text(L"tools.nearest_css");
+
+    std::array<std::wstring, 3> lines{
+        activeFormatLabel + L": " + formatLabel,
+        currentCodeLabel + L": " + DisplayCode(state, state->color),
         nearestLabel + L": " +
             std::wstring(nearest.name) +
             L"  " +
-            Hex(nearest.color),
+            DisplayCode(state, nearest.color),
     };
 
     for (std::size_t index = 0; index < lines.size(); ++index) {
+        SetTextColor(hdc, dktheme::TextColor(state->theme));
         RECT lineRect{
             textLeft,
             top + static_cast<int>(index) * rowHeight,
@@ -654,6 +725,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         tonesTitleY,
         Scale(hwnd, 740),
         tonesTitleY + rowHeight};
+    SetTextColor(hdc, dktheme::TextColor(state->theme));
     const std::wstring tonesTitleText = dkl10n::Text(L"tools.tones");
     DrawTextW(
         hdc,
@@ -677,7 +749,13 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             margin + static_cast<int>(index) * (smallSwatchWidth + swatchGap) + smallSwatchWidth,
             swatchTop + smallSwatchHeight};
         state->toneRects[index] = rect;
-        DrawSwatch(hdc, rect, state->tones[index], Hex(state->tones[index]), font);
+        DrawSwatch(
+            hdc,
+            rect,
+            state->tones[index],
+            DisplayCode(state, state->tones[index]),
+            font,
+            true);
     }
 
     const int harmonyTitleY = swatchTop + smallSwatchHeight + Scale(hwnd, 14);
@@ -686,6 +764,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         harmonyTitleY,
         Scale(hwnd, 740),
         harmonyTitleY + rowHeight};
+    SetTextColor(hdc, dktheme::TextColor(state->theme));
     const std::wstring harmonyTitleText = dkl10n::Text(L"tools.harmony");
     DrawTextW(
         hdc,
@@ -715,8 +794,9 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
             hdc,
             rect,
             state->harmonies[index],
-            Hex(state->harmonies[index]),
-            font);
+            DisplayCode(state, state->harmonies[index]),
+            font,
+            true);
     }
 
     const int contrastY = harmonyTop + smallSwatchHeight + Scale(hwnd, 14);
@@ -742,6 +822,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         contrastY,
         Scale(hwnd, 740),
         contrastY + Scale(hwnd, 36)};
+    SetTextColor(hdc, dktheme::TextColor(state->theme));
     DrawTextW(
         hdc,
         contrastText,
@@ -756,6 +837,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         Scale(hwnd, 740),
         recentTitleY + rowHeight};
     const std::wstring recentTitleText = dkl10n::Text(L"tools.recent");
+    SetTextColor(hdc, dktheme::TextColor(state->theme));
     DrawTextW(
         hdc,
         recentTitleText.c_str(),
@@ -766,6 +848,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     const int recentTop = recentTitleY + Scale(hwnd, 22);
     DrawLibrarySwatches(
         hwnd,
+        state,
         hdc,
         font,
         state->recentColors,
@@ -780,6 +863,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         Scale(hwnd, 740),
         favoritesTitleY + rowHeight};
     const std::wstring favoritesTitleText = dkl10n::Text(L"tools.favorites");
+    SetTextColor(hdc, dktheme::TextColor(state->theme));
     DrawTextW(
         hdc,
         favoritesTitleText.c_str(),
@@ -790,6 +874,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     const int favoritesTop = favoritesTitleY + Scale(hwnd, 22);
     DrawLibrarySwatches(
         hwnd,
+        state,
         hdc,
         font,
         state->favoriteColors,
@@ -825,6 +910,10 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         &helpRect,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE);
 
+    DrawSwatchFeedback(hwnd, state, hdc);
+
+    SetTextColor(hdc, oldTextColor);
+    SetBkMode(hdc, oldBkMode);
     SelectObject(hdc, oldFont);
 }
 
@@ -838,6 +927,7 @@ void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
          index < state->recentRects.size();
          ++index) {
         if (PointInside(state->recentRects[index], point)) {
+            FlashSwatch(hwnd, state, state->recentRects[index]);
             SetColorInternal(
                 hwnd,
                 state,
@@ -853,6 +943,7 @@ void HandleLibraryClick(HWND hwnd, UtilityState* state, POINT point) {
          index < state->favoriteRects.size();
          ++index) {
         if (PointInside(state->favoriteRects[index], point)) {
+            FlashSwatch(hwnd, state, state->favoriteRects[index]);
             SetColorInternal(
                 hwnd,
                 state,
@@ -1033,6 +1124,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             if (state->onCopyFormatChanged != nullptr) {
                 state->onCopyFormatChanged(state->copyFormat);
             }
+            InvalidateRect(hwnd, nullptr, TRUE);
             return 0;
         }
 
@@ -1098,6 +1190,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
             for (std::size_t index = 0; index < state->toneRects.size(); ++index) {
                 if (PointInside(state->toneRects[index], point)) {
+                    FlashSwatch(hwnd, state, state->toneRects[index]);
                     if (state->onCopyColor != nullptr) {
                         state->onCopyColor(state->tones[index]);
                     }
@@ -1107,6 +1200,7 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
 
             for (std::size_t index = 0; index < state->harmonyRects.size(); ++index) {
                 if (PointInside(state->harmonyRects[index], point)) {
+                    FlashSwatch(hwnd, state, state->harmonyRects[index]);
                     if (state->onCopyColor != nullptr) {
                         state->onCopyColor(state->harmonies[index]);
                     }
@@ -1117,6 +1211,18 @@ LRESULT CALLBACK UtilityProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             HandleLibraryClick(hwnd, state, point);
         }
         return 0;
+
+    case WM_TIMER:
+        if (wParam == kSwatchFeedbackTimerId && state != nullptr) {
+            KillTimer(hwnd, kSwatchFeedbackTimerId);
+            state->feedbackActive = false;
+
+            RECT dirty = state->feedbackRect;
+            InflateRect(&dirty, Scale(hwnd, 4), Scale(hwnd, 4));
+            InvalidateRect(hwnd, &dirty, FALSE);
+            return 0;
+        }
+        break;
 
     case WM_ERASEBKGND:
         if (state != nullptr && state->backgroundBrush != nullptr) {
@@ -1195,6 +1301,7 @@ HWND CreateUtilityWindow(
     HWND owner,
     COLORREF color,
     dkcolor::CopyFormat copyFormat,
+    const std::wstring& customTemplate,
     dktheme::ThemeMode theme,
     ColorChangedCallback onColorChanged,
     CopyColorCallback onCopyColor,
@@ -1202,6 +1309,7 @@ HWND CreateUtilityWindow(
     auto* state = new UtilityState();
     state->color = color;
     state->copyFormat = copyFormat;
+    state->customTemplate = customTemplate;
     state->theme = theme;
     state->onColorChanged = onColorChanged;
     state->onCopyColor = onCopyColor;
@@ -1283,6 +1391,23 @@ void SetUtilityCopyFormat(HWND hwnd, dkcolor::CopyFormat copyFormat) {
 
     state->copyFormat = copyFormat;
     RefreshFormatRadios(state);
+}
+
+void SetUtilityCustomTemplate(
+    HWND hwnd,
+    const std::wstring& customTemplate) {
+    if (hwnd == nullptr) {
+        return;
+    }
+
+    auto* state = reinterpret_cast<UtilityState*>(
+        GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    if (state == nullptr) {
+        return;
+    }
+
+    state->customTemplate = customTemplate;
+    InvalidateRect(hwnd, nullptr, TRUE);
 }
 
 void RefreshUtilityWindow(HWND hwnd, dktheme::ThemeMode theme) {
