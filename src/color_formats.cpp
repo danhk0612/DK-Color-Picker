@@ -1,6 +1,7 @@
 #include "color_formats.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cwchar>
 #include <string>
@@ -9,6 +10,20 @@ namespace dkcolor {
 namespace {
 
 constexpr double kPi = 3.1415926535897932384626433832795;
+
+constexpr std::array<CopyFormat, static_cast<std::size_t>(CopyFormat::Count)>
+    kCopyFormatDisplayOrder{
+        CopyFormat::Hex,
+        CopyFormat::Rgb,
+        CopyFormat::Rgba,
+        CopyFormat::Hsl,
+        CopyFormat::Hsv,
+        CopyFormat::Hwb,
+        CopyFormat::Cmyk,
+        CopyFormat::Lab,
+        CopyFormat::Oklch,
+        CopyFormat::Custom,
+    };
 
 double Clamp01(double value) {
     return std::clamp(value, 0.0, 1.0);
@@ -77,6 +92,17 @@ std::wstring RgbString(const ColorValues& values) {
     swprintf_s(
         buffer,
         L"rgb(%d, %d, %d)",
+        values.r,
+        values.g,
+        values.b);
+    return buffer;
+}
+
+std::wstring RgbaString(const ColorValues& values) {
+    wchar_t buffer[56]{};
+    swprintf_s(
+        buffer,
+        L"rgba(%d, %d, %d, 1)",
         values.r,
         values.g,
         values.b);
@@ -174,6 +200,7 @@ std::wstring ExpandTemplate(
 
     ReplaceAll(result, L"{hex}", HexString(values));
     ReplaceAll(result, L"{rgb}", RgbString(values));
+    ReplaceAll(result, L"{rgba}", RgbaString(values));
     ReplaceAll(result, L"{hsl}", HslString(values));
     ReplaceAll(result, L"{hsv}", HsvString(values));
     ReplaceAll(result, L"{hwb}", HwbString(values));
@@ -339,6 +366,8 @@ const wchar_t* CopyFormatLabel(CopyFormat format) {
         return L"HEX";
     case CopyFormat::Rgb:
         return L"RGB";
+    case CopyFormat::Rgba:
+        return L"RGBA";
     case CopyFormat::Hsl:
         return L"HSL";
     case CopyFormat::Hsv:
@@ -360,8 +389,29 @@ const wchar_t* CopyFormatLabel(CopyFormat format) {
     return L"HEX";
 }
 
+CopyFormat CopyFormatAtDisplayIndex(std::size_t index) {
+    if (index >= kCopyFormatDisplayOrder.size()) {
+        return CopyFormat::Hex;
+    }
+    return kCopyFormatDisplayOrder[index];
+}
+
+std::size_t CopyFormatDisplayIndex(CopyFormat format) {
+    const auto found = std::find(
+        kCopyFormatDisplayOrder.begin(),
+        kCopyFormatDisplayOrder.end(),
+        format);
+
+    if (found == kCopyFormatDisplayOrder.end()) {
+        return 0;
+    }
+
+    return static_cast<std::size_t>(
+        std::distance(kCopyFormatDisplayOrder.begin(), found));
+}
+
 std::wstring DefaultCustomTemplate() {
-    return L"{hex} / {rgb}";
+    return L"{hex} / {rgb} / {rgba}";
 }
 
 std::wstring FormatColor(
@@ -375,6 +425,8 @@ std::wstring FormatColor(
         return HexString(values);
     case CopyFormat::Rgb:
         return RgbString(values);
+    case CopyFormat::Rgba:
+        return RgbaString(values);
     case CopyFormat::Hsl:
         return HslString(values);
     case CopyFormat::Hsv:
