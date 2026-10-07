@@ -242,6 +242,9 @@ void LoadSettings() {
         g_settings.copyFormat = copyFormat;
     }
     g_settings.customTemplate = customTemplate.data();
+    if (g_settings.customTemplate == L"{hex} / {rgb}") {
+        g_settings.customTemplate = dkcolor::DefaultCustomTemplate();
+    }
     g_settings.alwaysOpenTools = alwaysOpenTools != 0;
     if (themeMode >= static_cast<int>(dktheme::ThemeMode::System) &&
         themeMode <= static_cast<int>(dktheme::ThemeMode::Dark)) {
