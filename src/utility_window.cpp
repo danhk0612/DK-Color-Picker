@@ -830,6 +830,61 @@ bool HandleColorClick(
     return true;
 }
 
+bool HandleColorDoubleClick(
+    HWND hwnd,
+    UtilityState* state,
+    POINT point,
+    const RECT& rect,
+    COLORREF color) {
+    if (state == nullptr ||
+        !PointInside(rect, point) ||
+        PointInside(StarRect(hwnd, rect), point)) {
+        return false;
+    }
+
+    SetColorInternal(hwnd, state, color);
+    return true;
+}
+
+bool HandleLibraryDoubleClick(
+    HWND hwnd,
+    UtilityState* state,
+    POINT point) {
+    if (state == nullptr) {
+        return false;
+    }
+
+    for (std::size_t index = 0;
+         index < state->recentColors.size() &&
+         index < state->recentRects.size();
+         ++index) {
+        if (HandleColorDoubleClick(
+                hwnd,
+                state,
+                point,
+                state->recentRects[index],
+                state->recentColors[index])) {
+            return true;
+        }
+    }
+
+    for (std::size_t index = 0;
+         index < state->favoriteColors.size() &&
+         index < state->favoriteRects.size();
+         ++index) {
+        if (HandleColorDoubleClick(
+                hwnd,
+                state,
+                point,
+                state->favoriteRects[index],
+                state->favoriteColors[index])) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void DrawLibrarySwatches(
     HWND hwnd,
     UtilityState* state,
@@ -976,7 +1031,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
     state->currentRect = {
         margin,
         Scale(hwnd, 58),
-        margin + Scale(hwnd, 130),
+        margin + Scale(hwnd, 280),
         Scale(hwnd, 102)};
 
     DrawSwatch(
@@ -993,7 +1048,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         dkcolor::NearestCssNamedColor(state->color);
 
     state->cssNameRect = {
-        margin + Scale(hwnd, 144),
+        state->currentRect.right + Scale(hwnd, 14),
         Scale(hwnd, 62),
         Scale(hwnd, kClientWidth - kMargin),
         Scale(hwnd, 90)};
@@ -1486,6 +1541,31 @@ LRESULT CALLBACK UtilityProc(
         }
         return 0;
 
+    case WM_LBUTTONDBLCLK:
+        if (state != nullptr) {
+            POINT point{
+                GET_X_LPARAM(lParam),
+                GET_Y_LPARAM(lParam)};
+
+            for (std::size_t index = 0;
+                 index < state->harmonyRects.size();
+                 ++index) {
+                if (HandleColorDoubleClick(
+                        hwnd,
+                        state,
+                        point,
+                        state->harmonyRects[index],
+                        state->harmonies[index])) {
+                    return 0;
+                }
+            }
+
+            if (HandleLibraryDoubleClick(hwnd, state, point)) {
+                return 0;
+            }
+        }
+        return 0;
+
     case WM_TIMER:
         if (wParam == kHarmonyHoverTimerId &&
             state != nullptr) {
@@ -1568,6 +1648,7 @@ LRESULT CALLBACK UtilityProc(
 bool RegisterUtilityWindowClass(HINSTANCE instance) {
     WNDCLASSEXW windowClass{};
     windowClass.cbSize = sizeof(windowClass);
+    windowClass.style = CS_DBLCLKS;
     windowClass.hInstance = instance;
     windowClass.lpfnWndProc = UtilityProc;
     windowClass.lpszClassName = kUtilityClass;
