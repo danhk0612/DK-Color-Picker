@@ -139,6 +139,78 @@ const wchar_t* HarmonyLabelKey(std::size_t index) {
     }
 }
 
+void SetHarmonyTooltipTracking(
+    HWND label,
+    UtilityState* state,
+    bool active) {
+    if (label == nullptr ||
+        state == nullptr ||
+        state->harmonyTooltip == nullptr) {
+        return;
+    }
+
+    TOOLINFOW tool{};
+    tool.cbSize = sizeof(tool);
+    tool.uFlags = TTF_IDISHWND | TTF_TRACK | TTF_ABSOLUTE;
+    tool.hwnd = GetParent(label);
+    tool.uId = reinterpret_cast<UINT_PTR>(label);
+
+    if (active) {
+        POINT cursor{};
+        if (GetCursorPos(&cursor)) {
+            SendMessageW(
+                state->harmonyTooltip,
+                TTM_TRACKPOSITION,
+                0,
+                MAKELPARAM(cursor.x + 12, cursor.y + 20));
+        }
+    }
+
+    SendMessageW(
+        state->harmonyTooltip,
+        TTM_TRACKACTIVATE,
+        active ? TRUE : FALSE,
+        reinterpret_cast<LPARAM>(&tool));
+}
+
+LRESULT CALLBACK HarmonyLabelSubclassProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam,
+    UINT_PTR subclassId,
+    DWORD_PTR referenceData) {
+    auto* state =
+        reinterpret_cast<UtilityState*>(referenceData);
+
+    switch (message) {
+    case WM_MOUSEMOVE: {
+        TRACKMOUSEEVENT tracking{};
+        tracking.cbSize = sizeof(tracking);
+        tracking.dwFlags = TME_LEAVE;
+        tracking.hwndTrack = hwnd;
+        TrackMouseEvent(&tracking);
+
+        SetHarmonyTooltipTracking(hwnd, state, true);
+        break;
+    }
+
+    case WM_MOUSELEAVE:
+        SetHarmonyTooltipTracking(hwnd, state, false);
+        break;
+
+    case WM_NCDESTROY:
+        SetHarmonyTooltipTracking(hwnd, state, false);
+        RemoveWindowSubclass(
+            hwnd,
+            HarmonyLabelSubclassProc,
+            subclassId);
+        break;
+    }
+
+    return DefSubclassProc(hwnd, message, wParam, lParam);
+}
+
 void AddHarmonyTooltipTools(HWND hwnd, UtilityState* state) {
     if (state == nullptr || state->harmonyTooltip == nullptr) {
         return;
@@ -152,7 +224,7 @@ void AddHarmonyTooltipTools(HWND hwnd, UtilityState* state) {
 
         TOOLINFOW tool{};
         tool.cbSize = sizeof(tool);
-        tool.uFlags = TTF_IDISHWND | TTF_SUBCLASS;
+        tool.uFlags = TTF_IDISHWND | TTF_TRACK | TTF_ABSOLUTE;
         tool.hwnd = hwnd;
         tool.uId = reinterpret_cast<UINT_PTR>(label);
         tool.lpszText = LPSTR_TEXTCALLBACKW;
@@ -162,6 +234,12 @@ void AddHarmonyTooltipTools(HWND hwnd, UtilityState* state) {
             TTM_ADDTOOLW,
             0,
             reinterpret_cast<LPARAM>(&tool));
+
+        SetWindowSubclass(
+            label,
+            HarmonyLabelSubclassProc,
+            static_cast<UINT_PTR>(index + 1),
+            reinterpret_cast<DWORD_PTR>(state));
     }
 
     SendMessageW(
@@ -1080,7 +1158,7 @@ LRESULT CALLBACK UtilityProc(
                 0,
                 L"STATIC",
                 L"",
-                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE,
+                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOTIFY,
                 0,
                 0,
                 0,
