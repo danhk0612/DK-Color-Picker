@@ -842,6 +842,12 @@ bool HandleColorDoubleClick(
         return false;
     }
 
+    dkcolorlib::AddRecentColor(color);
+
+    if (state->onRecentColorsChanged != nullptr) {
+        state->onRecentColorsChanged();
+    }
+
     SetColorInternal(hwnd, state, color);
     return true;
 }
