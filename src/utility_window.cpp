@@ -1,5 +1,6 @@
 #include "utility_window.h"
 
+#include <commctrl.h>
 #include <windowsx.h>
 
 #include "color_formats.h"
@@ -27,11 +28,25 @@ constexpr int kMargin = 14;
 constexpr int kLibraryColumns = 4;
 constexpr int kLibraryRowHeight = 32;
 constexpr std::size_t kHarmonyColorCount = 10;
+constexpr int kHarmonyTooltipBaseId = 4100;
+
+enum class HarmonyTooltipRow : std::size_t {
+    Analogous = 0,
+    Complementary,
+    SplitComplementary,
+    Triadic,
+    Square,
+    Count,
+};
+
+constexpr std::size_t kHarmonyTooltipCount =
+    static_cast<std::size_t>(HarmonyTooltipRow::Count);
 
 struct UtilityState {
     std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
         formatRadios{};
     HWND clearRecent = nullptr;
+    HWND harmonyTooltip = nullptr;
 
     COLORREF color = RGB(59, 130, 246);
     dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
@@ -85,6 +100,77 @@ std::wstring CopyFormatDisplayName(dkcolor::CopyFormat format) {
         return dkl10n::Text(L"format.custom");
     }
     return dkcolor::CopyFormatLabel(format);
+}
+
+const wchar_t* HarmonyTooltipKey(std::size_t index) {
+    switch (static_cast<HarmonyTooltipRow>(index)) {
+    case HarmonyTooltipRow::Analogous:
+        return L"tooltip.analogous";
+    case HarmonyTooltipRow::Complementary:
+        return L"tooltip.complementary";
+    case HarmonyTooltipRow::SplitComplementary:
+        return L"tooltip.split_complementary";
+    case HarmonyTooltipRow::Triadic:
+        return L"tooltip.triadic";
+    case HarmonyTooltipRow::Square:
+        return L"tooltip.square";
+    case HarmonyTooltipRow::Count:
+    default:
+        return L"";
+    }
+}
+
+void AddHarmonyTooltipTools(HWND hwnd, UtilityState* state) {
+    if (state == nullptr || state->harmonyTooltip == nullptr) {
+        return;
+    }
+
+    for (std::size_t index = 0; index < kHarmonyTooltipCount; ++index) {
+        TOOLINFOW tool{};
+        tool.cbSize = sizeof(tool);
+        tool.uFlags = TTF_SUBCLASS;
+        tool.hwnd = hwnd;
+        tool.uId =
+            static_cast<UINT_PTR>(kHarmonyTooltipBaseId + index);
+        tool.rect = RECT{0, 0, 0, 0};
+        tool.lpszText = LPSTR_TEXTCALLBACKW;
+        SendMessageW(
+            state->harmonyTooltip,
+            TTM_ADDTOOLW,
+            0,
+            reinterpret_cast<LPARAM>(&tool));
+    }
+
+    SendMessageW(
+        state->harmonyTooltip,
+        TTM_SETMAXTIPWIDTH,
+        0,
+        Scale(hwnd, 360));
+}
+
+void UpdateHarmonyTooltipRect(
+    HWND hwnd,
+    UtilityState* state,
+    std::size_t index,
+    const RECT& rect) {
+    if (state == nullptr ||
+        state->harmonyTooltip == nullptr ||
+        index >= kHarmonyTooltipCount) {
+        return;
+    }
+
+    TOOLINFOW tool{};
+    tool.cbSize = sizeof(tool);
+    tool.hwnd = hwnd;
+    tool.uId =
+        static_cast<UINT_PTR>(kHarmonyTooltipBaseId + index);
+    tool.rect = rect;
+
+    SendMessageW(
+        state->harmonyTooltip,
+        TTM_NEWTOOLRECTW,
+        0,
+        reinterpret_cast<LPARAM>(&tool));
 }
 
 void DeleteThemeBrushes(UtilityState* state) {
@@ -569,6 +655,7 @@ void DrawHarmonyRow(
     const COLORREF* colors,
     std::size_t count,
     std::size_t stateOffset,
+    std::size_t tooltipIndex,
     int top) {
     if (state == nullptr || colors == nullptr || count == 0) {
         return;
@@ -599,6 +686,12 @@ void DrawHarmonyRow(
         -1,
         &labelRect,
         DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+
+    UpdateHarmonyTooltipRect(
+        hwnd,
+        state,
+        tooltipIndex,
+        labelRect);
 
     for (std::size_t index = 0; index < count; ++index) {
         const std::size_t target = stateOffset + index;
@@ -718,10 +811,11 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         state,
         hdc,
         font,
-        dkl10n::Text(L"tools.complementary"),
-        complementary,
-        1,
+        dkl10n::Text(L"tools.analogous"),
+        harmony.analogous.data(),
+        harmony.analogous.size(),
         0,
+        static_cast<std::size_t>(HarmonyTooltipRow::Analogous),
         Scale(hwnd, 112));
 
     DrawHarmonyRow(
@@ -729,22 +823,12 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         state,
         hdc,
         font,
-        dkl10n::Text(L"tools.analogous"),
-        harmony.analogous.data(),
-        harmony.analogous.size(),
+        dkl10n::Text(L"tools.complementary"),
+        complementary,
         1,
+        2,
+        static_cast<std::size_t>(HarmonyTooltipRow::Complementary),
         Scale(hwnd, 144));
-
-    DrawHarmonyRow(
-        hwnd,
-        state,
-        hdc,
-        font,
-        dkl10n::Text(L"tools.triadic"),
-        harmony.triadic.data(),
-        harmony.triadic.size(),
-        3,
-        Scale(hwnd, 176));
 
     DrawHarmonyRow(
         hwnd,
@@ -754,7 +838,20 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         dkl10n::Text(L"tools.split_complementary"),
         harmony.splitComplementary.data(),
         harmony.splitComplementary.size(),
+        3,
+        static_cast<std::size_t>(HarmonyTooltipRow::SplitComplementary),
+        Scale(hwnd, 176));
+
+    DrawHarmonyRow(
+        hwnd,
+        state,
+        hdc,
+        font,
+        dkl10n::Text(L"tools.triadic"),
+        harmony.triadic.data(),
+        harmony.triadic.size(),
         5,
+        static_cast<std::size_t>(HarmonyTooltipRow::Triadic),
         Scale(hwnd, 208));
 
     DrawHarmonyRow(
@@ -766,6 +863,7 @@ void PaintUtility(HWND hwnd, UtilityState* state, HDC hdc) {
         harmony.square.data(),
         harmony.square.size(),
         7,
+        static_cast<std::size_t>(HarmonyTooltipRow::Square),
         Scale(hwnd, 240));
 
     const double whiteRatio =
@@ -972,6 +1070,37 @@ LRESULT CALLBACK UtilityProc(
         HFONT font =
             static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
 
+        INITCOMMONCONTROLSEX commonControls{};
+        commonControls.dwSize = sizeof(commonControls);
+        commonControls.dwICC = ICC_WIN95_CLASSES;
+        InitCommonControlsEx(&commonControls);
+
+        state->harmonyTooltip = CreateWindowExW(
+            WS_EX_TOPMOST,
+            TOOLTIPS_CLASSW,
+            nullptr,
+            WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            hwnd,
+            nullptr,
+            GetModuleHandleW(nullptr),
+            nullptr);
+
+        if (state->harmonyTooltip != nullptr) {
+            SetWindowPos(
+                state->harmonyTooltip,
+                HWND_TOPMOST,
+                0,
+                0,
+                0,
+                0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            AddHarmonyTooltipTools(hwnd, state);
+        }
+
         for (std::size_t index = 0;
              index < state->formatRadios.size();
              ++index) {
@@ -1046,6 +1175,44 @@ LRESULT CALLBACK UtilityProc(
         InvalidateRect(hwnd, nullptr, TRUE);
         return 0;
     }
+
+    case WM_NOTIFY:
+        if (state != nullptr &&
+            state->harmonyTooltip != nullptr) {
+            const auto* header =
+                reinterpret_cast<const NMHDR*>(lParam);
+
+            if (header != nullptr &&
+                header->hwndFrom == state->harmonyTooltip &&
+                header->code == TTN_GETDISPINFOW) {
+                auto* info =
+                    reinterpret_cast<NMTTDISPINFOW*>(lParam);
+
+                const UINT_PTR first =
+                    static_cast<UINT_PTR>(kHarmonyTooltipBaseId);
+                const UINT_PTR last =
+                    first + kHarmonyTooltipCount;
+
+                if (info->hdr.idFrom >= first &&
+                    info->hdr.idFrom < last) {
+                    const std::size_t index =
+                        static_cast<std::size_t>(
+                            info->hdr.idFrom - first);
+
+                    const std::wstring tooltip =
+                        dkl10n::Text(HarmonyTooltipKey(index));
+
+                    wcsncpy_s(
+                        info->szText,
+                        _countof(info->szText),
+                        tooltip.c_str(),
+                        _TRUNCATE);
+                    info->lpszText = info->szText;
+                    return 0;
+                }
+            }
+        }
+        break;
 
     case WM_COMMAND: {
         if (state == nullptr) {
@@ -1187,6 +1354,13 @@ LRESULT CALLBACK UtilityProc(
     case WM_NCDESTROY:
         if (state != nullptr) {
             KillTimer(hwnd, kSwatchFeedbackTimerId);
+
+            if (state->harmonyTooltip != nullptr &&
+                IsWindow(state->harmonyTooltip)) {
+                DestroyWindow(state->harmonyTooltip);
+                state->harmonyTooltip = nullptr;
+            }
+
             DeleteThemeBrushes(state);
         }
 

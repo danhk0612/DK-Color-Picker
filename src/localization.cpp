@@ -15,7 +15,7 @@ struct Entry {
     const wchar_t* en;
 };
 
-constexpr std::array<Entry, 44> kEntries{{
+constexpr std::array<Entry, 49> kEntries{{
     {L"app.title", L"DK Color Picker", L"DK Color Picker"},
     {L"tray.pick", L"색 추출", L"Pick color"},
     {L"tray.tools", L"색상 도구 열기", L"Open color tools"},
@@ -43,6 +43,11 @@ constexpr std::array<Entry, 44> kEntries{{
     {L"tools.triadic", L"삼각 배색", L"Triadic"},
     {L"tools.split_complementary", L"분할 보색", L"Split comp."},
     {L"tools.square", L"사각 배색", L"Square"},
+    {L"tooltip.analogous", L"메인 색상 확장", L"Extend the main color"},
+    {L"tooltip.complementary", L"강조", L"Emphasis"},
+    {L"tooltip.split_complementary", L"추가 강조나 구분", L"Additional emphasis or separation"},
+    {L"tooltip.triadic", L"추가 구분이 필요한 경우", L"When additional differentiation is needed"},
+    {L"tooltip.square", L"추가 구분이 필요한 경우", L"When additional differentiation is needed"},
     {L"tools.wcag", L"WCAG 대비", L"WCAG contrast"},
     {L"tools.recent", L"최근 색상", L"Recent colors"},
     {L"tools.favorites", L"즐겨찾기", L"Favorites"},

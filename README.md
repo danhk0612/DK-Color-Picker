@@ -90,13 +90,15 @@ Click **Similar CSS: color-name** to copy the CSS color name itself.
 
 ### Harmony colors
 
-Color Tools groups harmony suggestions by relationship to the picked color:
+Harmony suggestions are shown directly below the picked color in this order:
 
-- **Complementary**: 1 color at +180°
-- **Analogous**: 2 colors at -30° / +30°
-- **Triadic**: 2 colors at -120° / +120°
-- **Split complementary**: 2 colors at +150° / +210°
-- **Square**: 3 colors at +90° / +180° / +270°
+- **Analogous**: 2 colors at -30° / +30° — *Extend the main color*
+- **Complementary**: 1 color at +180° — *Emphasis*
+- **Split complementary**: 2 colors at +150° / +210° — *Additional emphasis or separation*
+- **Triadic**: 2 colors at -120° / +120° — *When additional differentiation is needed*
+- **Square**: 3 colors at +90° / +180° / +270° — *When additional differentiation is needed*
+
+Hover over a harmony label in Color Tools to see the same usage hint as a tooltip.
 
 Click any harmony swatch to copy its code. Harmony clicks do not replace the picked color and are not added to Recent Colors.
 
