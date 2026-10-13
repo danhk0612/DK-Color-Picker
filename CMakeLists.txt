@@ -31,7 +31,6 @@ target_compile_definitions(DKColorPicker PRIVATE
 
 target_link_libraries(DKColorPicker PRIVATE
     advapi32
-    comctl32
     dwmapi
     gdi32
     shell32
