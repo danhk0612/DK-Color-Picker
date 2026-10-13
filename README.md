@@ -100,7 +100,7 @@ Harmony suggestions are shown directly below the picked color in this order:
 
 Hover over a harmony label in Color Tools to see the same usage hint as a tooltip.
 
-Click any harmony swatch to copy its code. Harmony clicks do not replace the picked color and are not added to Recent Colors.
+Click any harmony swatch once to copy its code. Double-click a harmony swatch to make it the current Pick color. Double-clicking does not add it to Recent Colors.
 
 ### Recent colors
 
@@ -109,13 +109,14 @@ Only colors actually picked from the screen are added to Recent Colors.
 - Up to 8 unique colors are stored.
 - Picking the same color again moves it to the front.
 - Clicking a recent color copies it without creating another history entry.
+- Double-clicking a recent color makes it the current Pick color without changing Recent Colors.
 - Use **Clear recent colors** to empty the list.
 
 ### Favorites
 
 Use the **☆ / ★** control inside any color swatch to toggle Favorites.
 
-Favorites can be added from the current color, harmony colors, recent colors, or existing favorites. Up to 8 favorites can be stored. If all 8 slots are already used, trying to add another color shows a warning and leaves the existing favorites unchanged.
+Favorites can be added from the current color, harmony colors, recent colors, or existing favorites. Single-click a favorite to copy it; double-click it to make it the current Pick color. Up to 8 favorites can be stored. If all 8 slots are already used, trying to add another color shows a warning and leaves the existing favorites unchanged.
 
 The Favorites section is hidden when empty and appears automatically when the first favorite is added.
 
