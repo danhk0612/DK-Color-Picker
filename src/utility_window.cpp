@@ -1,6 +1,5 @@
 #include "utility_window.h"
 
-#include <commctrl.h>
 #include <windowsx.h>
 
 #include "color_formats.h"
@@ -23,6 +22,7 @@ constexpr wchar_t kUtilityClass[] = L"DKColorPicker.UtilityWindow";
 constexpr int kClearRecentId = 3004;
 constexpr int kFormatRadioBaseId = 3020;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
+constexpr UINT_PTR kHarmonyHoverTimerId = 2;
 constexpr int kClientWidth = 720;
 constexpr int kMargin = 14;
 constexpr int kLibraryColumns = 4;
@@ -46,9 +46,9 @@ struct UtilityState {
     std::array<HWND, static_cast<std::size_t>(dkcolor::CopyFormat::Count)>
         formatRadios{};
     HWND clearRecent = nullptr;
-    HWND harmonyTooltip = nullptr;
+    HWND harmonyHint = nullptr;
     std::array<HWND, kHarmonyTooltipCount> harmonyLabels{};
-    std::array<std::wstring, kHarmonyTooltipCount> harmonyTooltipTexts{};
+    int activeHarmonyHint = -1;
 
     COLORREF color = RGB(59, 130, 246);
     dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
@@ -140,153 +140,137 @@ const wchar_t* HarmonyLabelKey(std::size_t index) {
     }
 }
 
-void SetHarmonyTooltipTracking(
-    HWND label,
+void HideHarmonyHint(UtilityState* state) {
+    if (state == nullptr || state->harmonyHint == nullptr) {
+        return;
+    }
+
+    if (IsWindowVisible(state->harmonyHint)) {
+        ShowWindow(state->harmonyHint, SW_HIDE);
+    }
+    state->activeHarmonyHint = -1;
+}
+
+void ShowHarmonyHint(
+    HWND owner,
     UtilityState* state,
-    bool active) {
-    if (label == nullptr ||
-        state == nullptr ||
-        state->harmonyTooltip == nullptr) {
+    std::size_t index,
+    POINT cursor) {
+    if (state == nullptr ||
+        state->harmonyHint == nullptr ||
+        index >= kHarmonyTooltipCount) {
         return;
     }
 
-    TOOLINFOW tool{};
-    tool.cbSize = sizeof(tool);
-    tool.uFlags = TTF_IDISHWND | TTF_TRACK | TTF_ABSOLUTE;
-    tool.hwnd = GetParent(label);
-    tool.uId = reinterpret_cast<UINT_PTR>(label);
+    const std::wstring text =
+        dkl10n::Text(HarmonyTooltipKey(index));
 
-    if (active) {
-        POINT cursor{};
-        if (GetCursorPos(&cursor)) {
-            SendMessageW(
-                state->harmonyTooltip,
-                TTM_TRACKPOSITION,
-                0,
-                MAKELPARAM(cursor.x + 12, cursor.y + 20));
+    SetWindowTextW(state->harmonyHint, text.c_str());
+
+    HFONT font = reinterpret_cast<HFONT>(
+        SendMessageW(state->harmonyHint, WM_GETFONT, 0, 0));
+    if (font == nullptr) {
+        font = static_cast<HFONT>(
+            GetStockObject(DEFAULT_GUI_FONT));
+    }
+
+    SIZE textSize{};
+    HDC hdc = GetDC(state->harmonyHint);
+    if (hdc != nullptr) {
+        HGDIOBJ oldFont = SelectObject(hdc, font);
+        GetTextExtentPoint32W(
+            hdc,
+            text.c_str(),
+            static_cast<int>(text.size()),
+            &textSize);
+        SelectObject(hdc, oldFont);
+        ReleaseDC(state->harmonyHint, hdc);
+    }
+
+    const int width =
+        std::max(Scale(owner, 100), textSize.cx + Scale(owner, 18));
+    const int height =
+        std::max(Scale(owner, 26), textSize.cy + Scale(owner, 10));
+
+    int x = cursor.x + Scale(owner, 12);
+    int y = cursor.y + Scale(owner, 20);
+
+    HMONITOR monitor = MonitorFromPoint(
+        cursor,
+        MONITOR_DEFAULTTONEAREST);
+    MONITORINFO monitorInfo{};
+    monitorInfo.cbSize = sizeof(monitorInfo);
+
+    if (GetMonitorInfoW(monitor, &monitorInfo)) {
+        if (x + width > monitorInfo.rcWork.right) {
+            x = monitorInfo.rcWork.right - width;
+        }
+        if (y + height > monitorInfo.rcWork.bottom) {
+            y = cursor.y - height - Scale(owner, 8);
+        }
+        if (x < monitorInfo.rcWork.left) {
+            x = monitorInfo.rcWork.left;
+        }
+        if (y < monitorInfo.rcWork.top) {
+            y = monitorInfo.rcWork.top;
         }
     }
 
-    SendMessageW(
-        state->harmonyTooltip,
-        TTM_TRACKACTIVATE,
-        active ? TRUE : FALSE,
-        reinterpret_cast<LPARAM>(&tool));
+    SetWindowPos(
+        state->harmonyHint,
+        HWND_TOPMOST,
+        x,
+        y,
+        width,
+        height,
+        SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+    state->activeHarmonyHint =
+        static_cast<int>(index);
 }
 
-LRESULT CALLBACK HarmonyLabelSubclassProc(
-    HWND hwnd,
-    UINT message,
-    WPARAM wParam,
-    LPARAM lParam,
-    UINT_PTR subclassId,
-    DWORD_PTR referenceData) {
-    auto* state =
-        reinterpret_cast<UtilityState*>(referenceData);
-
-    switch (message) {
-    case WM_MOUSEMOVE: {
-        TRACKMOUSEEVENT tracking{};
-        tracking.cbSize = sizeof(tracking);
-        tracking.dwFlags = TME_LEAVE;
-        tracking.hwndTrack = hwnd;
-        TrackMouseEvent(&tracking);
-
-        SetHarmonyTooltipTracking(hwnd, state, true);
-        break;
-    }
-
-    case WM_MOUSELEAVE:
-        SetHarmonyTooltipTracking(hwnd, state, false);
-        break;
-
-    case WM_NCDESTROY:
-        SetHarmonyTooltipTracking(hwnd, state, false);
-        RemoveWindowSubclass(
-            hwnd,
-            HarmonyLabelSubclassProc,
-            subclassId);
-        break;
-    }
-
-    return DefSubclassProc(hwnd, message, wParam, lParam);
-}
-
-void UpdateHarmonyTooltipTexts(
-    HWND hwnd,
+void UpdateHarmonyHover(
+    HWND owner,
     UtilityState* state) {
-    if (state == nullptr) {
+    if (state == nullptr ||
+        state->harmonyHint == nullptr ||
+        !IsWindowVisible(owner)) {
+        HideHarmonyHint(state);
         return;
     }
 
-    for (std::size_t index = 0; index < state->harmonyTooltipTexts.size(); ++index) {
-        state->harmonyTooltipTexts[index] =
-            dkl10n::Text(HarmonyTooltipKey(index));
-
-        if (state->harmonyTooltip == nullptr ||
-            state->harmonyLabels[index] == nullptr) {
-            continue;
-        }
-
-        TOOLINFOW tool{};
-        tool.cbSize = sizeof(tool);
-        tool.uFlags = TTF_IDISHWND | TTF_TRACK | TTF_ABSOLUTE;
-        tool.hwnd = hwnd;
-        tool.uId =
-            reinterpret_cast<UINT_PTR>(state->harmonyLabels[index]);
-        tool.lpszText =
-            state->harmonyTooltipTexts[index].data();
-
-        SendMessageW(
-            state->harmonyTooltip,
-            TTM_UPDATETIPTEXTW,
-            0,
-            reinterpret_cast<LPARAM>(&tool));
-    }
-}
-
-void AddHarmonyTooltipTools(HWND hwnd, UtilityState* state) {
-    if (state == nullptr || state->harmonyTooltip == nullptr) {
+    POINT cursor{};
+    if (!GetCursorPos(&cursor)) {
+        HideHarmonyHint(state);
         return;
     }
 
-    for (std::size_t index = 0; index < state->harmonyTooltipTexts.size(); ++index) {
-        state->harmonyTooltipTexts[index] =
-            dkl10n::Text(HarmonyTooltipKey(index));
-    }
-
-    for (std::size_t index = 0; index < state->harmonyLabels.size(); ++index) {
+    for (std::size_t index = 0;
+         index < state->harmonyLabels.size();
+         ++index) {
         HWND label = state->harmonyLabels[index];
-        if (label == nullptr) {
+        if (label == nullptr || !IsWindowVisible(label)) {
             continue;
         }
 
-        TOOLINFOW tool{};
-        tool.cbSize = sizeof(tool);
-        tool.uFlags = TTF_IDISHWND | TTF_TRACK | TTF_ABSOLUTE;
-        tool.hwnd = hwnd;
-        tool.uId = reinterpret_cast<UINT_PTR>(label);
-        tool.lpszText =
-            state->harmonyTooltipTexts[index].data();
+        RECT rect{};
+        if (!GetWindowRect(label, &rect)) {
+            continue;
+        }
 
-        SendMessageW(
-            state->harmonyTooltip,
-            TTM_ADDTOOLW,
-            0,
-            reinterpret_cast<LPARAM>(&tool));
+        if (!PtInRect(&rect, cursor)) {
+            continue;
+        }
 
-        SetWindowSubclass(
-            label,
-            HarmonyLabelSubclassProc,
-            static_cast<UINT_PTR>(index + 1),
-            reinterpret_cast<DWORD_PTR>(state));
+        if (state->activeHarmonyHint !=
+            static_cast<int>(index) ||
+            !IsWindowVisible(state->harmonyHint)) {
+            ShowHarmonyHint(owner, state, index, cursor);
+        }
+        return;
     }
 
-    SendMessageW(
-        state->harmonyTooltip,
-        TTM_SETMAXTIPWIDTH,
-        0,
-        Scale(hwnd, 360));
+    HideHarmonyHint(state);
 }
 
 void DeleteThemeBrushes(UtilityState* state) {
@@ -394,7 +378,6 @@ void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
             label.c_str());
     }
 
-    UpdateHarmonyTooltipTexts(hwnd, state);
     RefreshFormatRadios(hwnd, state);
 }
 
@@ -1189,17 +1172,12 @@ LRESULT CALLBACK UtilityProc(
         HFONT font =
             static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
 
-        INITCOMMONCONTROLSEX commonControls{};
-        commonControls.dwSize = sizeof(commonControls);
-        commonControls.dwICC = ICC_WIN95_CLASSES;
-        InitCommonControlsEx(&commonControls);
-
         for (std::size_t index = 0; index < state->harmonyLabels.size(); ++index) {
             state->harmonyLabels[index] = CreateWindowExW(
                 0,
                 L"STATIC",
                 L"",
-                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE | SS_NOTIFY,
+                WS_CHILD | WS_VISIBLE | SS_LEFT | SS_CENTERIMAGE,
                 0,
                 0,
                 0,
@@ -1215,31 +1193,34 @@ LRESULT CALLBACK UtilityProc(
             SetControlFont(state->harmonyLabels[index], font);
         }
 
-        state->harmonyTooltip = CreateWindowExW(
-            WS_EX_TOPMOST,
-            TOOLTIPS_CLASSW,
-            nullptr,
-            WS_POPUP | TTS_ALWAYSTIP | TTS_NOPREFIX,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
+        state->harmonyHint = CreateWindowExW(
+            WS_EX_TOOLWINDOW |
+                WS_EX_TOPMOST |
+                WS_EX_NOACTIVATE,
+            L"STATIC",
+            L"",
+            WS_POPUP |
+                WS_BORDER |
+                SS_LEFT |
+                SS_CENTERIMAGE,
+            0,
+            0,
+            0,
+            0,
             hwnd,
             nullptr,
             GetModuleHandleW(nullptr),
             nullptr);
 
-        if (state->harmonyTooltip != nullptr) {
-            SetWindowPos(
-                state->harmonyTooltip,
-                HWND_TOPMOST,
-                0,
-                0,
-                0,
-                0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            AddHarmonyTooltipTools(hwnd, state);
+        if (state->harmonyHint != nullptr) {
+            SetControlFont(state->harmonyHint, font);
         }
+
+        SetTimer(
+            hwnd,
+            kHarmonyHoverTimerId,
+            100,
+            nullptr);
 
         for (std::size_t index = 0;
              index < state->formatRadios.size();
@@ -1406,6 +1387,12 @@ LRESULT CALLBACK UtilityProc(
         return 0;
 
     case WM_TIMER:
+        if (wParam == kHarmonyHoverTimerId &&
+            state != nullptr) {
+            UpdateHarmonyHover(hwnd, state);
+            return 0;
+        }
+
         if (wParam == kSwatchFeedbackTimerId &&
             state != nullptr) {
             KillTimer(hwnd, kSwatchFeedbackTimerId);
@@ -1450,17 +1437,19 @@ LRESULT CALLBACK UtilityProc(
     }
 
     case WM_CLOSE:
+        HideHarmonyHint(state);
         ShowWindow(hwnd, SW_HIDE);
         return 0;
 
     case WM_NCDESTROY:
         if (state != nullptr) {
             KillTimer(hwnd, kSwatchFeedbackTimerId);
+            KillTimer(hwnd, kHarmonyHoverTimerId);
 
-            if (state->harmonyTooltip != nullptr &&
-                IsWindow(state->harmonyTooltip)) {
-                DestroyWindow(state->harmonyTooltip);
-                state->harmonyTooltip = nullptr;
+            if (state->harmonyHint != nullptr &&
+                IsWindow(state->harmonyHint)) {
+                DestroyWindow(state->harmonyHint);
+                state->harmonyHint = nullptr;
             }
 
             DeleteThemeBrushes(state);
@@ -1615,6 +1604,7 @@ void RefreshUtilityWindow(
     }
 
     state->theme = theme;
+    HideHarmonyHint(state);
     ApplyLocalizedLabels(hwnd, state);
     RefreshLibraryState(state);
     ApplyTheme(hwnd, state);
