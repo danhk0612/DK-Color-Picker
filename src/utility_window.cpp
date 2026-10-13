@@ -19,6 +19,7 @@ namespace dkcolorui {
 namespace {
 
 constexpr wchar_t kUtilityClass[] = L"DKColorPicker.UtilityWindow";
+constexpr wchar_t kHarmonyHintClass[] = L"DKColorPicker.HarmonyHintWindow";
 constexpr int kClearRecentId = 3004;
 constexpr int kFormatRadioBaseId = 3020;
 constexpr UINT_PTR kSwatchFeedbackTimerId = 1;
@@ -140,6 +141,95 @@ const wchar_t* HarmonyLabelKey(std::size_t index) {
     }
 }
 
+LRESULT CALLBACK HarmonyHintProc(
+    HWND hwnd,
+    UINT message,
+    WPARAM wParam,
+    LPARAM lParam) {
+    switch (message) {
+    case WM_NCHITTEST:
+        return HTTRANSPARENT;
+
+    case WM_ERASEBKGND: {
+        RECT rect{};
+        GetClientRect(hwnd, &rect);
+        HBRUSH brush =
+            CreateSolidBrush(GetSysColor(COLOR_INFOBK));
+        FillRect(
+            reinterpret_cast<HDC>(wParam),
+            &rect,
+            brush);
+        DeleteObject(brush);
+        return 1;
+    }
+
+    case WM_PAINT: {
+        PAINTSTRUCT paint{};
+        HDC hdc = BeginPaint(hwnd, &paint);
+
+        RECT rect{};
+        GetClientRect(hwnd, &rect);
+
+        HBRUSH background =
+            CreateSolidBrush(GetSysColor(COLOR_INFOBK));
+        FillRect(hdc, &rect, background);
+        DeleteObject(background);
+
+        FrameRect(
+            hdc,
+            &rect,
+            GetSysColorBrush(COLOR_WINDOWFRAME));
+
+        wchar_t text[256]{};
+        GetWindowTextW(
+            hwnd,
+            text,
+            static_cast<int>(std::size(text)));
+
+        HFONT font = reinterpret_cast<HFONT>(
+            SendMessageW(hwnd, WM_GETFONT, 0, 0));
+        if (font == nullptr) {
+            font = static_cast<HFONT>(
+                GetStockObject(DEFAULT_GUI_FONT));
+        }
+
+        HGDIOBJ oldFont = SelectObject(hdc, font);
+        const int oldBkMode =
+            SetBkMode(hdc, TRANSPARENT);
+        const COLORREF oldText =
+            SetTextColor(hdc, GetSysColor(COLOR_INFOTEXT));
+
+        const UINT dpi = GetDpiForWindow(hwnd);
+        const int horizontalPadding =
+            MulDiv(8, static_cast<int>(dpi), 96);
+        const int verticalPadding =
+            MulDiv(4, static_cast<int>(dpi), 96);
+
+        RECT textRect = rect;
+        textRect.left += horizontalPadding;
+        textRect.right -= horizontalPadding;
+        textRect.top += verticalPadding;
+        textRect.bottom -= verticalPadding;
+
+        DrawTextW(
+            hdc,
+            text,
+            -1,
+            &textRect,
+            DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+
+        SetTextColor(hdc, oldText);
+        SetBkMode(hdc, oldBkMode);
+        SelectObject(hdc, oldFont);
+
+        EndPaint(hwnd, &paint);
+        return 0;
+    }
+    }
+
+    return DefWindowProcW(hwnd, message, wParam, lParam);
+}
+
 void HideHarmonyHint(UtilityState* state) {
     if (state == nullptr || state->harmonyHint == nullptr) {
         return;
@@ -155,7 +245,7 @@ void ShowHarmonyHint(
     HWND owner,
     UtilityState* state,
     std::size_t index,
-    POINT cursor) {
+    const RECT& labelRect) {
     if (state == nullptr ||
         state->harmonyHint == nullptr ||
         index >= kHarmonyTooltipCount) {
@@ -187,37 +277,36 @@ void ShowHarmonyHint(
         ReleaseDC(state->harmonyHint, hdc);
     }
 
-    const int measuredWidth =
-        static_cast<int>(textSize.cx) + Scale(owner, 18);
-    const int measuredHeight =
-        static_cast<int>(textSize.cy) + Scale(owner, 10);
+    const int horizontalPadding = Scale(owner, 8);
+    const int verticalPadding = Scale(owner, 4);
     const int width =
-        measuredWidth > Scale(owner, 100)
-            ? measuredWidth
-            : Scale(owner, 100);
+        static_cast<int>(textSize.cx) +
+        horizontalPadding * 2 + Scale(owner, 2);
     const int height =
-        measuredHeight > Scale(owner, 26)
-            ? measuredHeight
-            : Scale(owner, 26);
+        std::max(
+            Scale(owner, 26),
+            static_cast<int>(textSize.cy) +
+                verticalPadding * 2 + Scale(owner, 2));
 
-    int x = cursor.x + Scale(owner, 12);
-    int y = cursor.y + Scale(owner, 20);
+    int x = labelRect.right + Scale(owner, 8);
+    int y = labelRect.top;
 
+    POINT anchor{labelRect.left, labelRect.top};
     HMONITOR monitor = MonitorFromPoint(
-        cursor,
+        anchor,
         MONITOR_DEFAULTTONEAREST);
     MONITORINFO monitorInfo{};
     monitorInfo.cbSize = sizeof(monitorInfo);
 
     if (GetMonitorInfoW(monitor, &monitorInfo)) {
         if (x + width > monitorInfo.rcWork.right) {
-            x = monitorInfo.rcWork.right - width;
-        }
-        if (y + height > monitorInfo.rcWork.bottom) {
-            y = cursor.y - height - Scale(owner, 8);
+            x = labelRect.left - width - Scale(owner, 8);
         }
         if (x < monitorInfo.rcWork.left) {
             x = monitorInfo.rcWork.left;
+        }
+        if (y + height > monitorInfo.rcWork.bottom) {
+            y = monitorInfo.rcWork.bottom - height;
         }
         if (y < monitorInfo.rcWork.top) {
             y = monitorInfo.rcWork.top;
@@ -232,6 +321,12 @@ void ShowHarmonyHint(
         width,
         height,
         SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+    InvalidateRect(
+        state->harmonyHint,
+        nullptr,
+        TRUE);
+    UpdateWindow(state->harmonyHint);
 
     state->activeHarmonyHint =
         static_cast<int>(index);
@@ -273,7 +368,7 @@ void UpdateHarmonyHover(
         if (state->activeHarmonyHint !=
             static_cast<int>(index) ||
             !IsWindowVisible(state->harmonyHint)) {
-            ShowHarmonyHint(owner, state, index, cursor);
+            ShowHarmonyHint(owner, state, index, rect);
         }
         return;
     }
@@ -1205,12 +1300,9 @@ LRESULT CALLBACK UtilityProc(
             WS_EX_TOOLWINDOW |
                 WS_EX_TOPMOST |
                 WS_EX_NOACTIVATE,
-            L"STATIC",
+            kHarmonyHintClass,
             L"",
-            WS_POPUP |
-                WS_BORDER |
-                SS_LEFT |
-                SS_CENTERIMAGE,
+            WS_POPUP,
             0,
             0,
             0,
@@ -1485,7 +1577,25 @@ bool RegisterUtilityWindowClass(HINSTANCE instance) {
     windowClass.hIconSm = windowClass.hIcon;
     windowClass.hbrBackground = nullptr;
 
-    return RegisterClassExW(&windowClass) != 0;
+    if (RegisterClassExW(&windowClass) == 0 &&
+        GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+        return false;
+    }
+
+    WNDCLASSEXW hintClass{};
+    hintClass.cbSize = sizeof(hintClass);
+    hintClass.hInstance = instance;
+    hintClass.lpfnWndProc = HarmonyHintProc;
+    hintClass.lpszClassName = kHarmonyHintClass;
+    hintClass.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+    hintClass.hbrBackground = nullptr;
+
+    if (RegisterClassExW(&hintClass) == 0 &&
+        GetLastError() != ERROR_CLASS_ALREADY_EXISTS) {
+        return false;
+    }
+
+    return true;
 }
 
 HWND CreateUtilityWindow(
