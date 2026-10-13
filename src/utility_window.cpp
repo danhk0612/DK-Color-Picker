@@ -48,6 +48,7 @@ struct UtilityState {
     HWND clearRecent = nullptr;
     HWND harmonyTooltip = nullptr;
     std::array<HWND, kHarmonyTooltipCount> harmonyLabels{};
+    std::array<std::wstring, kHarmonyTooltipCount> harmonyTooltipTexts{};
 
     COLORREF color = RGB(59, 130, 246);
     dkcolor::CopyFormat copyFormat = dkcolor::CopyFormat::Hex;
@@ -211,9 +212,47 @@ LRESULT CALLBACK HarmonyLabelSubclassProc(
     return DefSubclassProc(hwnd, message, wParam, lParam);
 }
 
+void UpdateHarmonyTooltipTexts(
+    HWND hwnd,
+    UtilityState* state) {
+    if (state == nullptr) {
+        return;
+    }
+
+    for (std::size_t index = 0; index < state->harmonyTooltipTexts.size(); ++index) {
+        state->harmonyTooltipTexts[index] =
+            dkl10n::Text(HarmonyTooltipKey(index));
+
+        if (state->harmonyTooltip == nullptr ||
+            state->harmonyLabels[index] == nullptr) {
+            continue;
+        }
+
+        TOOLINFOW tool{};
+        tool.cbSize = sizeof(tool);
+        tool.uFlags = TTF_IDISHWND | TTF_TRACK | TTF_ABSOLUTE;
+        tool.hwnd = hwnd;
+        tool.uId =
+            reinterpret_cast<UINT_PTR>(state->harmonyLabels[index]);
+        tool.lpszText =
+            state->harmonyTooltipTexts[index].data();
+
+        SendMessageW(
+            state->harmonyTooltip,
+            TTM_UPDATETIPTEXTW,
+            0,
+            reinterpret_cast<LPARAM>(&tool));
+    }
+}
+
 void AddHarmonyTooltipTools(HWND hwnd, UtilityState* state) {
     if (state == nullptr || state->harmonyTooltip == nullptr) {
         return;
+    }
+
+    for (std::size_t index = 0; index < state->harmonyTooltipTexts.size(); ++index) {
+        state->harmonyTooltipTexts[index] =
+            dkl10n::Text(HarmonyTooltipKey(index));
     }
 
     for (std::size_t index = 0; index < state->harmonyLabels.size(); ++index) {
@@ -227,7 +266,8 @@ void AddHarmonyTooltipTools(HWND hwnd, UtilityState* state) {
         tool.uFlags = TTF_IDISHWND | TTF_TRACK | TTF_ABSOLUTE;
         tool.hwnd = hwnd;
         tool.uId = reinterpret_cast<UINT_PTR>(label);
-        tool.lpszText = LPSTR_TEXTCALLBACKW;
+        tool.lpszText =
+            state->harmonyTooltipTexts[index].data();
 
         SendMessageW(
             state->harmonyTooltip,
@@ -354,6 +394,7 @@ void ApplyLocalizedLabels(HWND hwnd, UtilityState* state) {
             label.c_str());
     }
 
+    UpdateHarmonyTooltipTexts(hwnd, state);
     RefreshFormatRadios(hwnd, state);
 }
 
@@ -1274,43 +1315,6 @@ LRESULT CALLBACK UtilityProc(
         InvalidateRect(hwnd, nullptr, TRUE);
         return 0;
     }
-
-    case WM_NOTIFY:
-        if (state != nullptr &&
-            state->harmonyTooltip != nullptr) {
-            const auto* header =
-                reinterpret_cast<const NMHDR*>(lParam);
-
-            if (header != nullptr &&
-                header->hwndFrom == state->harmonyTooltip &&
-                header->code == TTN_GETDISPINFOW) {
-                auto* info =
-                    reinterpret_cast<NMTTDISPINFOW*>(lParam);
-
-                const HWND label =
-                    reinterpret_cast<HWND>(info->hdr.idFrom);
-
-                for (std::size_t index = 0;
-                     index < state->harmonyLabels.size();
-                     ++index) {
-                    if (state->harmonyLabels[index] != label) {
-                        continue;
-                    }
-
-                    const std::wstring tooltip =
-                        dkl10n::Text(HarmonyTooltipKey(index));
-
-                    wcsncpy_s(
-                        info->szText,
-                        _countof(info->szText),
-                        tooltip.c_str(),
-                        _TRUNCATE);
-                    info->lpszText = info->szText;
-                    return 0;
-                }
-            }
-        }
-        break;
 
     case WM_COMMAND: {
         if (state == nullptr) {
