@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 
-project(DKColorPicker VERSION 0.1.2 LANGUAGES CXX)
+project(DKColorPicker VERSION 0.1.3 LANGUAGES CXX)
 
 add_executable(DKColorPicker WIN32
     src/main.cpp
@@ -31,6 +31,7 @@ target_compile_definitions(DKColorPicker PRIVATE
 
 target_link_libraries(DKColorPicker PRIVATE
     advapi32
+    comctl32
     dwmapi
     gdi32
     shell32
