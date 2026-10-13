@@ -187,10 +187,18 @@ void ShowHarmonyHint(
         ReleaseDC(state->harmonyHint, hdc);
     }
 
+    const int measuredWidth =
+        static_cast<int>(textSize.cx) + Scale(owner, 18);
+    const int measuredHeight =
+        static_cast<int>(textSize.cy) + Scale(owner, 10);
     const int width =
-        std::max(Scale(owner, 100), textSize.cx + Scale(owner, 18));
+        measuredWidth > Scale(owner, 100)
+            ? measuredWidth
+            : Scale(owner, 100);
     const int height =
-        std::max(Scale(owner, 26), textSize.cy + Scale(owner, 10));
+        measuredHeight > Scale(owner, 26)
+            ? measuredHeight
+            : Scale(owner, 26);
 
     int x = cursor.x + Scale(owner, 12);
     int y = cursor.y + Scale(owner, 20);
